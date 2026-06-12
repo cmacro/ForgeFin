@@ -34,4 +34,6 @@ Supported:
 - llama.cpp
 - MLX
 
-Never assume OpenAI API exists.
+
+每次执行开发任务都需要在.harness/logs中保留日志
+

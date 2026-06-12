@@ -7,7 +7,6 @@
 - **前端 UI**: Leptos (CSR 模式) - 提供高性能、响应式的 Web-like 体验。
 - **客户端壳**: Tauri - 提供原生系统访问、窗口管理与 Rust 后端集成。
 - **本地数据库**: SQLite (via sqlx) - 确保数据的 ACID 特性与本地持久化。
-- **本地 AI**: Candle (Hugging Face) - 集成 2B 规模模型（如 Qwen2-1.5B / Gemma-2B）。
 - **语言**: Rust (全栈) - 保证内存安全与极致性能。
 
 ## 3. 目录结构规划
@@ -24,7 +23,6 @@ ForgeFin/
 │   │   ├── main.rs          # Tauri 入口
 │   │   ├── commands/         # UI 调用接口 (Tauri Commands)
 │   │   ├── db/              # SQLite 数据库迁移与访问层
-│   │   ├── ai/              # Candle 模型加载与推理逻辑
 │   │   ├── services/        # 核心业务逻辑 (财务计算、审计)
 │   │   └── models/          # 领域模型定义
 │   ├── migrations/          # SQL 迁移脚本
