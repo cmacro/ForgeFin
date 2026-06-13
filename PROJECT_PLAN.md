@@ -1,45 +1,59 @@
-# ForgeFin 项目规划
+# ForgeFin 开发计划 (Project Roadmap)
 
 ## 1. 核心愿景
-构建一个基于 Rust 的本地优先财务管理软件，采用“胖客户端 + 瘦服务”模式。所有敏感财务数据存储在本地，利用本地轻量级 LLM 提供智能分析与自动化记账。
+构建一个专业的**工程项目财务核算系统**。区别于通用记账软件，本项目深度适配建设工程行业，支持项目独立核算、凭证化记账、成本细分（料/工/费/税）及复杂的资金往来跟踪。
 
-## 2. 技术栈
-- **前端 UI**: Leptos (CSR 模式) - 提供高性能、响应式的 Web-like 体验。
-- **客户端壳**: Tauri - 提供原生系统访问、窗口管理与 Rust 后端集成。
-- **本地数据库**: SQLite (via sqlx) - 确保数据的 ACID 特性与本地持久化。
-- **语言**: Rust (全栈) - 保证内存安全与极致性能。
+## 2. 架构标准
+- **模式**: DDD Lite + Clean Architecture。
+- **技术栈**: Rust (Core) $\rightarrow$ SQLite (Persistence) $\rightarrow$ Tauri (Shell) $\rightarrow$ Leptos (UI)。
+- **交付标准 (DoD)**:
+    - **单元测试**: 核心逻辑覆盖率 $> 80\%$，通过 `cargo test`。
+    - **人为验收**: 每个里程碑必须提供可运行的入口（CLI 或 UI），通过 `cargo run` 或 `cargo tauri dev` 验证功能。
 
-## 3. 目录结构规划
-```text
-ForgeFin/
-├── .harness/                # AI Agent 控制与指令集
-├── src/                     # Leptos 前端源代码
-│   ├── components/          # 可复用 UI 组件
-│   ├── pages/               # 业务页面 (账单, 报表, 设置)
-│   ├── app.rs               # 应用主入口与路由
-│   └── store/               # 前端状态管理
-├── src-tauri/               # Tauri 后端源代码
-│   ├── src/
-│   │   ├── main.rs          # Tauri 入口
-│   │   ├── commands/         # UI 调用接口 (Tauri Commands)
-│   │   ├── db/              # SQLite 数据库迁移与访问层
-│   │   ├── services/        # 核心业务逻辑 (财务计算、审计)
-│   │   └── models/          # 领域模型定义
-│   ├── migrations/          # SQL 迁移脚本
-│   └── tauri.conf.json      # Tauri 配置文件
-├── assets/                  # 静态资源 (图片, 字体)
-└── Cargo.toml               # 全局依赖管理
-```
+## 3. 分阶段开发里程碑
 
-## 4. 核心模块设计
-### 4.1 数据层 (Local Storage)
-- **模式**: 关系型数据库，支持多账本管理。
-- **关键表**: `accounts` (账户), `transactions` (交易记录), `categories` (类目), `budgets` (预算)。
+### 阶段 1: 基础设施与数据建模 (Foundation)
+- **核心任务**:
+    - [ ] 建立 SQLite 数据库迁移机制 (`sqlx` migrations)。
+    - [ ] 实现领域模型：`Project` (项目), `Account` (账户), `Category` (成本类目)。
+    - [ ] 实现基于 Repository 模式的数据访问层。
+- **验证方案**:
+    - **测试**: 编写 DB 读写单元测试。
+    - **验收**: 运行简单的 CLI 工具，能创建项目并持久化到本地 DB。
 
-### 4.2 AI 推理层 (Edge AI)
-- **任务**: 自然语言记账 (e.g., "昨天买了杯咖啡 25 元") $\rightarrow$ 结构化 JSON $\rightarrow$ 存入 DB。
-- **部署**: 模型权重文件存放在用户本地数据目录 (`app_data_dir`)。
+### 阶段 2: 凭证核算引擎 (Accounting Engine)
+- **核心任务**:
+    - [ ] 实现**凭证系统 (Voucher System)**：支持单笔交易的结构化记录。
+    - [ ] 实现**成本归集逻辑**：严格区分 $\text{材料费} \rightarrow \text{劳务费} \rightarrow \text{日常费} \rightarrow \text{税金}$。
+    - [ ] 实现项目级利润计算：$\text{收入合计} - \text{支出合计} = \text{项目利润}$。
+- **验证方案**:
+    - **测试**: 针对不同凭证组合的利润计算单元测试。
+    - **验收**: 通过 CLI 模拟输入一组凭证，输出正确的项目汇总报表。
 
-### 4.3 通信机制
-- **UI $\rightarrow$ Rust**: 通过 `invoke` 调用 Tauri 命令。
-- **Rust $\rightarrow$ UI**: 通过 `emit` 发送异步事件通知。
+### 3. 专项业务模块 (Specialized Modules)
+- **核心任务**:
+    - [ ] **税务管理**: 实现各项目预缴税费的独立记录与汇总。
+    - [ ] **劳务分包**: 实现分包单位合同金额、已付、未付余款跟踪。
+    - [ ] **保证金管理**: 实现投标/履约保证金的存取跟踪。
+    - [ ] **发票跟踪**: 实现专票/普票状态与付款记录的关联。
+- **验证方案**:
+    - **测试**: 针对余款计算、税金汇总的边界值测试。
+    - **验收**: 通过 CLI 验证特定业务场景（如：分包款支付 $\rightarrow$ 更新余款 $\rightarrow$ 关联发票）。
+
+### 4. 界面集成与 Tauri 桥接 (UI & Integration)
+- **核心任务**:
+    - [ ] 定义 Tauri Commands 接口层，将后端 Service 暴露给前端。
+    - [ ] 开发 Leptos 基础页面：项目概览页、凭证录入页、汇总报表页。
+    - [ ] 实现前端状态管理与异步数据刷新。
+- **验证方案**:
+    - **测试**: 编写 Tauri Command 的集成测试。
+    - **验收**: 启动 `cargo tauri dev`，完成一次从“创建项目 $\rightarrow$ 录入凭证 $\rightarrow$ 查看报表”的完整闭环。
+
+### 5. AI 智能增强层 (AI Layer)
+- **核心任务**:
+    - [ ] 集成本地 LLM (Qwen-Coder) 推理接口。
+    - [ ] 实现自然语言 $\rightarrow$ 结构化 JSON 凭证的 Prompt 链。
+    - [ ] 实现“AI 辅助审核”功能：检测凭证类目与摘要是否匹配。
+- **验证方案**:
+    - **测试**: 建立测试集（自然语言描述 $\rightarrow$ 预期 JSON），验证模型准确率。
+    - **验收**: 在 UI 中输入“昨天给张三付了劳务费 5000 元”，系统自动生成预览凭证并允许用户确认入账。

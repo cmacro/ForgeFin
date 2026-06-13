@@ -1,22 +1,17 @@
-use tauri::Manager;
+use crate::commands::{add_project_record, ping, ProjectServiceState};
+use crate::infrastructure::persistence::repositories::sqlite_project_repository::SqliteProjectRepository;
+use crate::application::services::project_service::ProjectService;
+use sqlx::sqlite::SqlitePool;
 
-mod commands;
-mod db;
-mod ai;
-mod services;
-mod models;
+#[tauri::command]
+fn setup_db(pool: SqlitePool) {
+    // Migration and pool setup logic
+}
 
 fn main() {
-    tracing_subscriber::fmt::init();
-
     tauri::Builder::default()
-        .setup(|app| {
-            // Initialize DB and AI models here
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            commands::ping
-        ])
+        .plugin(tauri::plugin::shell::run())
+        .invoke_handler(tauri::generate_handler![ping, add_project_record])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

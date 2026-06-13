@@ -1,9 +1,10 @@
 pub mod ledger;
+pub mod repositories;
 
 #[cfg(test)]
 mod tests {
     use super::ledger::*;
-
+    
     #[test]
     fn test_voucher_is_balanced() {
         let items = vec![
