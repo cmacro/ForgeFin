@@ -1,5 +1,7 @@
 pub mod ledger;
 pub mod repositories;
+pub mod infrastructure;
+pub mod application;
 
 #[cfg(test)]
 mod tests {

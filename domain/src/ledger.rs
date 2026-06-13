@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, NaiveDate, Utc};
+use sqlx::FromRow;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Project {
     pub id: i64,
     pub code: String,
@@ -9,7 +10,7 @@ pub struct Project {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Account {
     pub id: i64,
     pub code: String,
@@ -18,7 +19,8 @@ pub struct Account {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "TEXT")]
 pub enum AccountType {
     Asset,
     Liability,
@@ -37,14 +39,15 @@ pub struct Voucher {
     pub items: Vec<VoucherItem>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "TEXT")]
 pub enum VoucherStatus {
     Unposted,
     Posted,
     Locked,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct VoucherItem {
     pub id: i64,
     pub voucher_id: i64,

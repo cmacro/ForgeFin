@@ -23,3 +23,4 @@ target
 raw/
 
 .DS_Store
+*.db
