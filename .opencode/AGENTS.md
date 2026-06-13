@@ -35,5 +35,5 @@ Supported:
 - MLX
 
 
-每次执行开发任务都需要在.harness/logs中保留日志
+每次执行开发任务都需要在.opencode/logs中保留日志
 
