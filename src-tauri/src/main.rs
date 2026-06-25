@@ -1,17 +1,6 @@
-use crate::commands::{add_project_record, ping, ProjectServiceState};
-use crate::infrastructure::persistence::repositories::sqlite_project_repository::SqliteProjectRepository;
-use crate::application::services::project_service::ProjectService;
-use sqlx::sqlite::SqlitePool;
-
-#[tauri::command]
-fn setup_db(pool: SqlitePool) {
-    // Migration and pool setup logic
-}
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    tauri::Builder::default()
-        .plugin(tauri::plugin::shell::run())
-        .invoke_handler(tauri::generate_handler![ping, add_project_record])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    forgefin_lib::run()
 }

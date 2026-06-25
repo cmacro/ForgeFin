@@ -1,39 +1,36 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "forgefin",
+  "version": "0.1.0",
+  "identifier": "com.dev.forgefin",
   "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:3000",
-    "distDir": "../dist"
+    "beforeDevCommand": "trunk serve --port 5175",
+    "devUrl": "http://localhost:5175",
+    "beforeBuildCommand": "trunk build",
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "ForgeFin",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": true
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.forgefin.app",
-      "icon": [
-        "assets/icon.png",
-        "assets/icon.png",
-        "assets/icon.png"
-      ]
-    },
-    "security": {
-      "csp": null
-    },
+  "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
-        "title": "ForgeFin - 智能财务管理",
-        "width": 1200,
-        "height": 800,
-        "resizable": true,
-        "fullscreen": false
+        "title": "forgefin",
+        "width": 800,
+        "height": 600
       }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
   }
 }

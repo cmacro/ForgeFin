@@ -24,3 +24,4 @@ raw/
 
 .DS_Store
 *.db
+dist/
