@@ -1,315 +1,132 @@
-# ForgeFin Agent Operating Rules
+# ForgeFin Agent Rules
 
-These rules apply throughout the entire project lifecycle.
+## Project
 
-All agents must follow these rules before generating code, modifying files, or creating new features.
+ForgeFin is a desktop-first financial management application.
 
----
+**Target Users:**
+- Accountants
+- Financial Managers
+- Auditors
+- CFOs
 
-# Project Overview
+**Technology Stack:**
+- Rust Stable
+- Tauri 2.x
+- Leptos 0.8
+- Tailwind CSS v4
+- SQLite
 
-ForgeFin is a desktop-first financial management system.
+ForgeFin is a professional business application.
 
-Technology Stack:
-
-* Rust Stable
-* Tauri 2.x
-* Leptos 0.8
-* Tailwind CSS v4
-* SQLite
-
-Target Users:
-
-* Accountants
-* Financial Managers
-* Auditors
-* CFOs
-
-The application is a professional financial tool, not a marketing website.
+**It is NOT:**
+- a marketing website
+- a landing page
+- a portfolio website
+- a social application
 
 ---
 
-# Core Principles
+## Directory Rules
 
-## Consistency Over Creativity
+Pages MUST be stored in:
+`src/pages/`
 
-Follow existing project patterns.
+**Examples:**
+- `src/pages/dashboard.rs`
+- `src/pages/voucher.rs`
+- `src/pages/general_ledger.rs`
 
-Do not introduce new architectures, libraries, or coding styles unless explicitly requested.
+Reusable UI components MUST be stored in:
+`src/components/`
 
-Consistency is more important than personal preference.
+**Examples:**
+- `src/components/layout/`
+- `src/components/table/`
+- `src/components/form/`
+- `src/components/charts/`
 
----
-
-## Incremental Development
-
-Prefer small, focused changes.
-
-Avoid large-scale rewrites.
-
-Avoid touching unrelated files.
-
-Each task should produce a working result.
-
----
-
-## Simplicity First
-
-Follow:
-
-* KISS
-* DRY
-* YAGNI
-
-Do not build future features.
-
-Implement only what is required.
+Do not place reusable components directly inside page files.
 
 ---
 
-# Directory Rules
+## Required Skills
 
-## Pages
+The following skills must be applied based on the task type.
 
-All pages MUST be stored under:
-
-```text
-src/pages/
-```
-
-Examples:
-
-```text
-src/pages/dashboard.rs
-src/pages/voucher.rs
-src/pages/general_ledger.rs
-```
-
-Never place page implementations inside:
-
-```text
-src/components/
-```
+| Task Type | Required Skills | Purpose |
+|------------|------------|------------|
+| New Page Generation | forgefin-page-generator | Generates complete pages following ForgeFin standards |
+| UI Modification / Review | forgefin-ui-principles, forgefin-theme-system | Maintain visual consistency, information density, and theme compatibility |
+| Layout Design | forgefin-layout-patterns, forgefin-ui-principles | Apply standard ForgeFin page structures and navigation patterns |
+| Financial Logic / UI | forgefin-financial-workflows, forgefin-ui-principles | Implement accounting workflows and financial user experiences |
+| Theme / Styling | forgefin-theme-system | Manage design tokens, themes, colors, and density modes |
 
 ---
 
-## Components
+## Financial Application Rules
 
-Reusable UI components MUST be stored under:
-
-```text
-src/components/
-```
-
-Examples:
-
-```text
-src/components/table/
-src/components/form/
-src/components/layout/
-src/components/charts/
-```
-
-Components should be reusable and independent.
+- All monetary values must use precise decimal handling (`rust_decimal` recommended)
+- Date handling must be consistent and timezone-aware (`chrono` or `time` crate)
+- Financial operations (vouchers, journals, postings) must include proper audit trail considerations
+- All amounts should respect configured decimal precision (usually 2 decimals)
+- Sensitive actions must include confirmation dialogs or permission checks
+- Reports and ledgers must support data export (Excel recommended)
+- Numbers, currencies, and percentages must follow consistent formatting across the application
 
 ---
 
-## Feature Organization
+## Coding Rules
 
-Prefer feature-oriented organization.
+Follow existing project patterns and Rust/Leptos best practices.
 
-Example:
+**Prefer:**
+- Small, focused, reusable components
+- Clear, descriptive naming conventions
+- Strong typing and proper error handling
+- Server Functions (`#[server]`) for backend logic
 
-```text
-src/pages/voucher.rs
+**Rust & Leptos Best Practices:**
+- Use `Signal` / `Resource` for state management
+- Prefer `Result<T, E>` with proper user-facing error messages
+- Avoid `unwrap()` / `expect()` in production code
+- All forms should use consistent validation patterns
+- Financial calculations must use precise decimal types
+- Components should be as pure as possible with minimal side effects
 
-src/components/voucher/
-    voucher_table.rs
-    voucher_form.rs
-    voucher_toolbar.rs
-```
-
-Avoid creating large monolithic files.
-
----
-
-# UI Design Rules
-
-Use the ForgeFin Enterprise Design System.
-
-Design References:
-
-* SAP Fiori
-* Oracle Financials
-* Kingdee Cloud
-* Ant Design Pro
+**Avoid:**
+- Large-scale refactoring unless explicitly requested
+- Unnecessary new dependencies
+- Rewriting unrelated files
+- Inline complex business logic in UI components
 
 ---
 
-## Required
+## Completion Criteria
 
-* Desktop-first
-* Information dense
-* Professional appearance
-* Sidebar navigation
-* Top toolbar
-* Data-first layout
-* Compact forms
-* Dense tables
-
----
-
-## Forbidden
-
-Do NOT generate:
-
-* Landing pages
-* Marketing pages
-* Hero sections
-* Pricing cards
-* Testimonials
-* Glassmorphism
-* Gradient backgrounds
-* Startup SaaS layouts
-
----
-
-## Visual Rules
-
-Colors:
-
-* Neutral
-* Slate
-* Zinc
-
-Radius:
-
-```text
-rounded-md
-```
-
-Only.
-
-Shadows:
-
-```text
-shadow-sm
-```
-
-Only.
-
-Spacing:
-
-```text
-8px grid system
-```
-
----
-
-# Leptos Rules
-
-Prefer:
-
-```rust
-#[component]
-```
-
-small focused components.
-
-Avoid components exceeding 300 lines whenever practical.
-
-Split large UI into smaller components.
-
----
-
-# Rust Rules
-
-Prefer:
-
-* Strong typing
-* Explicit structures
-* Clear naming
-
-Avoid:
-
-* unwrap()
-* expect()
-
-unless failure is impossible.
-
-Handle errors gracefully.
-
----
-
-# Dependency Rules
-
-Before introducing a new dependency:
-
-Ask:
-
-1. Can existing code solve this?
-2. Can std solve this?
-3. Is the dependency maintained?
-
-Do not add dependencies unnecessarily.
-
----
-
-# Completion Criteria
-
-A task is NOT complete until:
-
-```bash
-cargo check
-```
-
-passes successfully.
-
-Mandatory validation:
-
-```bash
+Before considering a task complete:
+```sh 
 cargo fmt
 cargo check
 ```
 
-Both must succeed.
+Both commands must succeed.
+
+**If `cargo check` fails:**
+The task is NOT complete.
 
 ---
 
-# Definition of Done
+## Definition of Done
 
-A task is complete only when:
+A task is considered complete only when **all** of the following are satisfied:
 
-* Feature implemented
-* Code compiles
-* No obvious warnings
-* UI follows ForgeFin design rules
-* Files placed in correct directories
-* Existing functionality remains intact
+- Feature is fully implemented and functional
+- UI follows ForgeFin design principles and visual standards
+- Files are placed in the correct directories
+- Code follows the project's naming and architectural patterns
+- `cargo fmt` passes
+- `cargo check` passes
+- No new warnings introduced (where reasonably avoidable)
 
-If any item fails, the task is not complete.
-
----
-
-# Agent Behavior
-
-Before coding:
-
-1. Understand existing patterns.
-2. Follow existing structure.
-3. Minimize changes.
-
-While coding:
-
-1. Create focused components.
-2. Keep code readable.
-3. Avoid unnecessary abstraction.
-
-After coding:
-
-1. Run formatting.
-2. Run cargo check.
-3. Verify directory rules.
-4. Verify design rules.
-
-Only then consider the task complete.
+If any item above fails, the task is **not complete**.
