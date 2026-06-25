@@ -7,11 +7,11 @@
 @layer base {
   :root {
     --color-surface: #ffffff;
-    --color-surface-alt: #f8fafc;
-    --color-surface-hover: #f1f5f9;
+    --color-surface-alt: #f5f7fa;
+    --color-surface-hover: #eef2f7;
     --color-surface-active: #e2e8f0;
 
-    --color-primary: #0f172a;
+    --color-primary: #1e293b;
     --color-secondary: #64748b;
     --color-disabled: #94a3b8;
 
@@ -20,21 +20,34 @@
 
     --color-brand: #2563eb;
     --color-brand-hover: #1d4ed8;
+    --color-brand-soft: #eff6ff;
 
     --color-success: #16a34a;
+    --color-success-soft: #ecfdf5;
     --color-warning: #d97706;
+    --color-warning-soft: #fffbeb;
     --color-danger: #dc2626;
+    --color-danger-soft: #fef2f2;
     --color-info: #0284c7;
+    --color-info-soft: #f0f9ff;
 
-    --color-sidebar: #ffffff;
-    --color-sidebar-active: #eff6ff;
-    --color-sidebar-hover: #f1f5f9;
+    --color-sidebar: #1e293b;
+    --color-sidebar-text: #cbd5e1;
+    --color-sidebar-muted: #94a3b8;
+    --color-sidebar-hover: #334155;
+    --color-sidebar-active: #2563eb;
+    --color-sidebar-active-text: #ffffff;
 
     --color-draft: #64748b;
+    --color-draft-soft: #f1f5f9;
     --color-pending: #d97706;
-    --color-approved: #2563eb;
-    --color-posted: #16a34a;
+    --color-pending-soft: #fffbeb;
+    --color-approved: #16a34a;
+    --color-approved-soft: #ecfdf5;
+    --color-posted: #2563eb;
+    --color-posted-soft: #eff6ff;
     --color-archived: #94a3b8;
+    --color-archived-soft: #f1f5f9;
   }
 
   html.dark {
@@ -52,21 +65,34 @@
 
     --color-brand: #3b82f6;
     --color-brand-hover: #2563eb;
+    --color-brand-soft: #1e3a8a;
 
     --color-success: #22c55e;
+    --color-success-soft: #14532d;
     --color-warning: #f59e0b;
+    --color-warning-soft: #78350f;
     --color-danger: #ef4444;
+    --color-danger-soft: #7f1d1d;
     --color-info: #38bdf8;
+    --color-info-soft: #075985;
 
-    --color-sidebar: #1e293b;
-    --color-sidebar-active: #1e3a8a;
-    --color-sidebar-hover: #334155;
+    --color-sidebar: #0f172a;
+    --color-sidebar-text: #cbd5e1;
+    --color-sidebar-muted: #64748b;
+    --color-sidebar-hover: #1e293b;
+    --color-sidebar-active: #3b82f6;
+    --color-sidebar-active-text: #ffffff;
 
     --color-draft: #94a3b8;
+    --color-draft-soft: #334155;
     --color-pending: #f59e0b;
-    --color-approved: #3b82f6;
-    --color-posted: #22c55e;
+    --color-pending-soft: #78350f;
+    --color-approved: #22c55e;
+    --color-approved-soft: #14532d;
+    --color-posted: #3b82f6;
+    --color-posted-soft: #1e3a8a;
     --color-archived: #64748b;
+    --color-archived-soft: #334155;
   }
 }
 
@@ -79,5 +105,23 @@
     background-color: var(--color-surface-alt);
     color: var(--color-primary);
     -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-main);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-secondary);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }

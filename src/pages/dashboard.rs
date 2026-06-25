@@ -5,21 +5,16 @@ use crate::components::layout::breadcrumb::{Breadcrumb, Crumb};
 
 #[component]
 pub fn Dashboard() -> impl IntoView {
-    let (cash, _set_cash) = signal("¥ 1,280,500.00".to_string());
-    let (receivable, _set_receivable) = signal("¥ 420,300.00".to_string());
-    let (payable, _set_payable) = signal("¥ 310,200.00".to_string());
-    let (month_revenue, _set_month_revenue) = signal("¥ 856,000.00".to_string());
-
     view! {
         <div class="flex flex-col gap-4 p-4 flex-1 overflow-auto">
             <Breadcrumb crumbs=vec![Crumb { label: "首页" }] />
             <h1 class="text-lg font-semibold text-primary">"财务概览"</h1>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="现金余额" value=cash accent=KpiAccent::Info />
-                <KpiCard label="应收账款" value=receivable accent=KpiAccent::Success />
-                <KpiCard label="应付账款" value=payable accent=KpiAccent::Warning />
-                <KpiCard label="本月收入" value=month_revenue accent=KpiAccent::Neutral />
+                <KpiCard label="现金余额" value="¥ 1,280,500.00".to_string() unit=None accent=KpiAccent::Info />
+                <KpiCard label="应收账款" value="¥ 420,300.00".to_string() unit=None accent=KpiAccent::Success />
+                <KpiCard label="应付账款" value="¥ 310,200.00".to_string() unit=None accent=KpiAccent::Warning />
+                <KpiCard label="本月收入" value="¥ 856,000.00".to_string() unit=None accent=KpiAccent::Neutral />
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -5,10 +5,27 @@ use crate::nav::{nav_tree, NavItem, NavState};
 #[component]
 pub fn Sidebar(nav: NavState) -> impl IntoView {
     view! {
-        <aside class="bg-sidebar border-r border-main flex flex-col overflow-hidden shrink-0 transition-[width] duration-200"
+        <aside
+            class="bg-sidebar border-r border-main flex flex-col overflow-hidden shrink-0 transition-[width] duration-200"
             class=("w-60", move || !nav.collapsed.get())
             class=("w-18", move || nav.collapsed.get())
         >
+            <div
+                class="h-14 flex items-center gap-2 px-4 border-b border-sidebar-hover shrink-0"
+                class=("justify-start", move || !nav.collapsed.get())
+                class=("justify-center", move || nav.collapsed.get())
+            >
+                <div class="w-8 h-8 rounded-md bg-brand text-white flex items-center justify-center text-sm font-semibold shrink-0">
+                    "FF"
+                </div>
+                <Show when=move || !nav.collapsed.get()>
+                    <div class="flex flex-col leading-tight min-w-0">
+                        <span class="text-white font-semibold text-sm truncate">"ForgeFin"</span>
+                        <span class="text-sidebar-muted text-xs truncate">"财务管理工具"</span>
+                    </div>
+                </Show>
+            </div>
+
             <nav class="flex-1 overflow-y-auto py-2">
                 <ul class="space-y-0.5 px-2">
                     <For each=move || nav_tree() key=|item| item.label let:item>
@@ -39,10 +56,16 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
         <li>
             <div
                 class="flex items-center gap-2 rounded-md text-sm cursor-pointer select-none transition-colors"
-                class=("bg-sidebar-active text-brand", is_active)
-                class=("text-primary hover:bg-sidebar-hover", move || !is_active())
+                class=(
+                    "bg-sidebar-active text-sidebar-active-text font-medium",
+                    is_active
+                )
+                class=(
+                    "text-sidebar-text hover:bg-sidebar-hover hover:text-white",
+                    move || !is_active()
+                )
                 class=("pl-3 py-2", depth == 0)
-                class=("pl-6 py-1.5", depth > 0)
+                class=("pl-9 py-1.5", depth > 0)
                 on:click=move |_| {
                     if has_children {
                         nav_expand.toggle_expand(item_key);
@@ -51,19 +74,30 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
                     }
                 }
             >
-                <span class="w-4 h-4 flex items-center justify-center shrink-0 text-secondary">
+                <span
+                    class="w-4 h-4 flex items-center justify-center shrink-0"
+                    class=("text-white", is_active)
+                    class=("text-sidebar-muted", move || !is_active())
+                >
                     <NavIcon name=icon />
                 </span>
                 <span class="flex-1 truncate" class=("hidden", move || collapsed.get())>{label}</span>
                 <Show when=move || has_children && !collapsed.get()>
-                    <svg class="w-3 h-3 text-disabled transition-transform" class=("rotate-90", is_expanded) viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <svg
+                        class="w-3 h-3 text-sidebar-muted transition-transform"
+                        class=("rotate-90", is_expanded)
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                    >
                         <path d="M4 3l4 3-4 3" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </Show>
             </div>
 
             <Show when=move || has_children && is_expanded() && !collapsed.get()>
-                <ul class="space-y-0.5">
+                <ul class="space-y-0.5 mt-0.5">
                     <For each=move || children_stored.get_value().unwrap_or_default() key=|child| child.label let:child>
                         <NavItemRow item=child nav=nav_child.clone() depth=depth_for_child />
                     </For>
