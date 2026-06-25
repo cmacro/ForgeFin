@@ -3,7 +3,7 @@ mod components;
 mod nav;
 mod pages;
 
-use app::*;
+use crate::app::App;
 use leptos::prelude::*;
 
 fn main() {

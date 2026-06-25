@@ -3,7 +3,7 @@ APP_NAME = ForgeFin
 PORT = 5175
 
 # 默认目标：安装依赖并启动开发环境
-all: deps build-css dev
+all: dev
 
 # -----------------------------------------------------------------------------
 # 0. 依赖安装 (Dependencies)
@@ -13,10 +13,10 @@ deps:
 	npm install
 
 build-css:
-	npx tailwindcss -i styles.css -o dist/styles.css
+	npx tailwindcss -i styles.css -o public/styles.css
 
 watch-css:
-	npx tailwindcss -i styles.css -o dist/styles.css --watch
+	npx tailwindcss -i styles.css -o public/styles.css --watch
 
 # -----------------------------------------------------------------------------
 # 1. 开发与调试 (Development)
