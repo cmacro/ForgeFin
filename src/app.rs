@@ -1,67 +1,45 @@
-use leptos::task::spawn_local;
-use leptos::{ev::SubmitEvent, prelude::*};
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::*;
+use leptos::prelude::*;
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"])]
-    async fn invoke(cmd: &str, args: JsValue) -> JsValue;
-}
-
-#[derive(Serialize, Deserialize)]
-struct GreetArgs<'a> {
-    name: &'a str,
-}
+use crate::components::layout::shell::AppShell;
+use crate::nav::{NavKey, NavState};
+use crate::pages::dashboard::Dashboard;
+use crate::pages::general_ledger::GeneralLedger;
+use crate::pages::placeholder::Placeholder;
+use crate::pages::voucher::VoucherManagement;
 
 #[component]
 pub fn App() -> impl IntoView {
-    let (name, set_name) = signal(String::new());
-    let (greet_msg, set_greet_msg) = signal(String::new());
+    let nav = NavState::new();
+    let active = nav.active;
 
-    let update_name = move |ev| {
-        let v = event_target_value(&ev);
-        set_name.set(v);
-    };
-
-    let greet = move |ev: SubmitEvent| {
-        ev.prevent_default();
-        spawn_local(async move {
-            let name = name.get_untracked();
-            if name.is_empty() {
-                return;
-            }
-
-            let args = serde_wasm_bindgen::to_value(&GreetArgs { name: &name }).unwrap();
-            // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-            let new_msg = invoke("greet", args).await.as_string().unwrap();
-            set_greet_msg.set(new_msg);
-        });
+    let children = move || {
+        let key = active.get();
+        view! {
+            {match key {
+                NavKey::Home => view! { <Dashboard /> }.into_any(),
+                NavKey::VoucherManagement
+                | NavKey::VoucherEntry
+                | NavKey::VoucherAudit
+                | NavKey::VoucherQuery => view! { <VoucherManagement /> }.into_any(),
+                NavKey::AccountBalance => view! { <Placeholder title="科目余额" /> }.into_any(),
+                NavKey::DetailedLedger => view! { <Placeholder title="明细账" /> }.into_any(),
+                NavKey::GeneralLedger => view! { <GeneralLedger /> }.into_any(),
+                NavKey::TrialBalance => view! { <Placeholder title="试算平衡表" /> }.into_any(),
+                NavKey::ReportCenter => view! { <Placeholder title="报表中心" /> }.into_any(),
+                NavKey::AccountsReceivable => view! { <Placeholder title="应收管理" /> }.into_any(),
+                NavKey::AccountsPayable => view! { <Placeholder title="应付管理" /> }.into_any(),
+                NavKey::FixedAssets => view! { <Placeholder title="固定资产" /> }.into_any(),
+                NavKey::CashierManagement => view! { <Placeholder title="出纳管理" /> }.into_any(),
+                NavKey::BudgetManagement => view! { <Placeholder title="预算管理" /> }.into_any(),
+                NavKey::TaxManagement => view! { <Placeholder title="税务管理" /> }.into_any(),
+                NavKey::SystemSettings => view! { <Placeholder title="系统设置" /> }.into_any(),
+            }}
+        }
     };
 
     view! {
-        <main class="container">
-            <h1>"Welcome to Tauri + Leptos"</h1>
-
-            <div class="row">
-                <a href="https://tauri.app" target="_blank">
-                    <img src="public/tauri.svg" class="logo tauri" alt="Tauri logo"/>
-                </a>
-                <a href="https://docs.rs/leptos/" target="_blank">
-                    <img src="public/leptos.svg" class="logo leptos" alt="Leptos logo"/>
-                </a>
-            </div>
-            <p>"Click on the Tauri and Leptos logos to learn more."</p>
-
-            <form class="row" on:submit=greet>
-                <input
-                    id="greet-input"
-                    placeholder="Enter a name..."
-                    on:input=update_name
-                />
-                <button type="submit">"Greet"</button>
-            </form>
-            <p>{ move || greet_msg.get() }</p>
-        </main>
+        <AppShell nav=nav.clone()>
+            {children}
+        </AppShell>
     }
 }
