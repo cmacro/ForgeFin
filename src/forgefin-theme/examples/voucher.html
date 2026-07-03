@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN" class="">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ForgeFin · 凭证示例</title>
+    <link rel="stylesheet" href="../styles/index.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <main class="app-main" style="margin-left: 0">
+        <header class="app-header">
+          <div class="app-header-left">
+            <div>
+              <div class="page-title">凭证管理</div>
+              <div class="page-subtitle">查看并管理所有会计凭证</div>
+            </div>
+          </div>
+          <div class="app-header-right">
+            <button class="btn-primary">新建凭证</button>
+          </div>
+        </header>
+
+        <section class="app-content">
+          <!-- 状态标签 -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px">
+            <span class="tag tag-draft"><span class="tag-dot"></span>草稿</span>
+            <span class="tag tag-pending"><span class="tag-dot"></span>待审核</span>
+            <span class="tag tag-approved"><span class="tag-dot"></span>已审核</span>
+            <span class="tag tag-posted"><span class="tag-dot"></span>已过账</span>
+            <span class="tag tag-archived"><span class="tag-dot"></span>已归档</span>
+          </div>
+
+          <!-- 凭证表格 -->
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>凭证号</th>
+                  <th>日期</th>
+                  <th>摘要</th>
+                  <th>状态</th>
+                  <th class="data-table-num">借方合计</th>
+                  <th class="data-table-num">贷方合计</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>记-2026-0703-001</td>
+                  <td>2026-07-03</td>
+                  <td>收到客户货款</td>
+                  <td><span class="tag tag-posted">已过账</span></td>
+                  <td class="data-table-num text-money">128,000.00</td>
+                  <td class="data-table-num text-money">128,000.00</td>
+                </tr>
+                <tr class="selected">
+                  <td>记-2026-0703-002</td>
+                  <td>2026-07-03</td>
+                  <td>支付供应商款项</td>
+                  <td><span class="tag tag-pending">待审核</span></td>
+                  <td class="data-table-num text-money">56,400.00</td>
+                  <td class="data-table-num text-money">56,400.00</td>
+                </tr>
+                <tr>
+                  <td>记-2026-0702-018</td>
+                  <td>2026-07-02</td>
+                  <td>计提本月折旧</td>
+                  <td><span class="tag tag-draft">草稿</span></td>
+                  <td class="data-table-num text-money">12,300.00</td>
+                  <td class="data-table-num text-money">12,300.00</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

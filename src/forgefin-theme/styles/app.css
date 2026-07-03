@@ -1,9 +1,3 @@
-@import "tailwindcss";
-
-@theme {
-  --spacing: 1px;
-}
-
 @layer base {
   :root {
     /* ===========================
@@ -75,7 +69,7 @@
     --color-sidebar: #1f2937;
     --color-sidebar-text: #d1d5db;
     --color-sidebar-muted: #9ca3af;
-    --color-sidebar-hover: rgba(255,255,255,.08);
+    --color-sidebar-hover: rgba(255, 255, 255, .08);
     --color-sidebar-active: #1677ff;
     --color-sidebar-active-text: #ffffff;
 
@@ -112,15 +106,15 @@
     --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
 
     --shadow-sm:
-      0 1px 2px rgba(15,23,42,.04),
-      0 2px 4px rgba(15,23,42,.02);
+      0 1px 2px rgba(15, 23, 42, .04),
+      0 2px 4px rgba(15, 23, 42, .02);
 
     --shadow-md:
-      0 2px 8px rgba(15,23,42,.05),
-      0 4px 12px rgba(15,23,42,.04);
+      0 2px 8px rgba(15, 23, 42, .05),
+      0 4px 12px rgba(15, 23, 42, .04);
 
     --shadow-lg:
-      0 8px 24px rgba(15,23,42,.08);
+      0 8px 24px rgba(15, 23, 42, .08);
 
     /* ===========================
        Layout
@@ -136,7 +130,6 @@
   }
 
   html.dark {
-
     --color-bg: #141414;
 
     --color-surface: #1f1f1f;
@@ -160,41 +153,41 @@
     --color-brand: #1677ff;
     --color-brand-hover: #4096ff;
     --color-brand-active: #0958d9;
-    --color-brand-soft: rgba(22,119,255,.15);
+    --color-brand-soft: rgba(22, 119, 255, .15);
 
     --color-success: #49aa19;
-    --color-success-soft: rgba(73,170,25,.15);
+    --color-success-soft: rgba(73, 170, 25, .15);
 
     --color-warning: #fa8c16;
-    --color-warning-soft: rgba(250,140,22,.15);
+    --color-warning-soft: rgba(250, 140, 22, .15);
 
     --color-danger: #ff4d4f;
-    --color-danger-soft: rgba(255,77,79,.15);
+    --color-danger-soft: rgba(255, 77, 79, .15);
 
     --color-info: #1677ff;
-    --color-info-soft: rgba(22,119,255,.15);
+    --color-info-soft: rgba(22, 119, 255, .15);
 
     --color-sidebar: #111827;
     --color-sidebar-text: #d1d5db;
     --color-sidebar-muted: #6b7280;
-    --color-sidebar-hover: rgba(255,255,255,.08);
+    --color-sidebar-hover: rgba(255, 255, 255, .08);
     --color-sidebar-active: #1677ff;
     --color-sidebar-active-text: #ffffff;
 
     --color-draft: #9ca3af;
-    --color-draft-soft: rgba(255,255,255,.06);
+    --color-draft-soft: rgba(255, 255, 255, .06);
 
     --color-pending: #fa8c16;
-    --color-pending-soft: rgba(250,140,22,.15);
+    --color-pending-soft: rgba(250, 140, 22, .15);
 
     --color-approved: #49aa19;
-    --color-approved-soft: rgba(73,170,25,.15);
+    --color-approved-soft: rgba(73, 170, 25, .15);
 
     --color-posted: #1677ff;
-    --color-posted-soft: rgba(22,119,255,.15);
+    --color-posted-soft: rgba(22, 119, 255, .15);
 
     --color-archived: #9ca3af;
-    --color-archived-soft: rgba(255,255,255,.06);
+    --color-archived-soft: rgba(255, 255, 255, .06);
   }
 
   /* ===========================
@@ -208,7 +201,6 @@
     padding: 0;
 
     background: var(--color-bg);
-
     color: var(--color-primary);
 
     font-family:
@@ -223,7 +215,6 @@
 
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-
     text-rendering: optimizeLegibility;
   }
 
@@ -254,35 +245,6 @@
     cursor: pointer;
   }
 
-  input,
-  textarea,
-  select {
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-primary);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
-  }
-
-  input::placeholder,
-  textarea::placeholder {
-    color: var(--color-placeholder);
-  }
-
-  input:hover,
-  textarea:hover,
-  select:hover {
-    border-color: #b8c0cc;
-  }
-
-  input:focus,
-  textarea:focus,
-  select:focus {
-    outline: none;
-    border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px rgba(22,119,255,.15);
-  }
-
   table {
     border-collapse: collapse;
   }
@@ -293,7 +255,7 @@
   }
 
   ::selection {
-    background: rgba(22,119,255,.18);
+    background: rgba(22, 119, 255, .18);
   }
 
   /* ===========================

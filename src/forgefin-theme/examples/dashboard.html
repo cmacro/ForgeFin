@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN" class="">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ForgeFin · 仪表盘示例</title>
+    <link rel="stylesheet" href="../styles/index.css" />
+  </head>
+  <body>
+    <div class="app-layout">
+      <main class="app-main" style="margin-left: 0">
+        <header class="app-header">
+          <div class="app-header-left">
+            <div class="page-title">财务仪表盘</div>
+          </div>
+          <div class="app-header-right">
+            <span class="header-action">⚙</span>
+            <span class="header-avatar">Z</span>
+          </div>
+        </header>
+
+        <section class="app-content">
+          <!-- 统计卡片 -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px">
+            <div class="card stat-card">
+              <span class="stat-card-label">本月收入</span>
+              <span class="stat-card-value">¥ 1,280,500</span>
+              <span class="stat-card-delta up">↑ 12.4% 环比</span>
+            </div>
+            <div class="card stat-card">
+              <span class="stat-card-label">本月支出</span>
+              <span class="stat-card-value">¥ 864,200</span>
+              <span class="stat-card-delta down">↓ 3.1% 环比</span>
+            </div>
+            <div class="card stat-card">
+              <span class="stat-card-label">净利润</span>
+              <span class="stat-card-value">¥ 416,300</span>
+              <span class="stat-card-delta up">↑ 28.7% 环比</span>
+            </div>
+            <div class="card stat-card">
+              <span class="stat-card-label">待审核凭证</span>
+              <span class="stat-card-value">12</span>
+              <span class="stat-card-delta down">需处理</span>
+            </div>
+          </div>
+
+          <!-- 最近凭证 -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">最近凭证</div>
+                <div class="card-subtitle">最近 5 条会计凭证记录</div>
+              </div>
+            </div>
+            <div class="data-table" style="border: none; border-radius: 0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>凭证号</th>
+                    <th>日期</th>
+                    <th>摘要</th>
+                    <th>状态</th>
+                    <th class="data-table-num">金额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>记-2026-0703-001</td>
+                    <td>2026-07-03</td>
+                    <td>收到客户货款</td>
+                    <td><span class="tag tag-posted">已过账</span></td>
+                    <td class="data-table-num text-money">128,000.00</td>
+                  </tr>
+                  <tr>
+                    <td>记-2026-0703-002</td>
+                    <td>2026-07-03</td>
+                    <td>支付供应商款项</td>
+                    <td><span class="tag tag-pending">待审核</span></td>
+                    <td class="data-table-num text-money">56,400.00</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

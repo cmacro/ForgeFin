@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --spacing: 1px;
+}
+
+@import "./app.css";
+@import "./layout.css";
+@import "./sidebar.css";
+@import "./header.css";
+@import "./form.css";
+@import "./table.css";
+@import "./card.css";
+@import "./tag.css";
+@import "./modal.css";
+@import "./utilities.css";

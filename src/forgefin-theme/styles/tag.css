@@ -1,0 +1,76 @@
+@layer components {
+  /* ===========================
+     Tag
+  =========================== */
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 18px;
+    background: var(--color-muted);
+    color: var(--color-secondary);
+  }
+
+  .tag-brand {
+    background: var(--color-brand-soft);
+    color: var(--color-brand);
+  }
+
+  .tag-success {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  .tag-warning {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  .tag-danger {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .tag-info {
+    background: var(--color-info-soft);
+    color: var(--color-info);
+  }
+
+  /* Voucher Status Tags */
+
+  .tag-draft {
+    background: var(--color-draft-soft);
+    color: var(--color-draft);
+  }
+
+  .tag-pending {
+    background: var(--color-pending-soft);
+    color: var(--color-pending);
+  }
+
+  .tag-approved {
+    background: var(--color-approved-soft);
+    color: var(--color-approved);
+  }
+
+  .tag-posted {
+    background: var(--color-posted-soft);
+    color: var(--color-posted);
+  }
+
+  .tag-archived {
+    background: var(--color-archived-soft);
+    color: var(--color-archived);
+  }
+
+  .tag-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+}

@@ -13,10 +13,10 @@ deps:
 	npm install
 
 build-css:
-	npx tailwindcss -i styles.css -o public/styles.css
+	npx tailwindcss -i src/forgefin-theme/styles/index.css -o public/styles.css
 
 watch-css:
-	npx tailwindcss -i styles.css -o public/styles.css --watch
+	npx tailwindcss -i src/forgefin-theme/styles/index.css -o public/styles.css --watch
 
 # -----------------------------------------------------------------------------
 # 1. 开发与调试 (Development)
