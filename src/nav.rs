@@ -209,6 +209,47 @@ impl NavState {
     }
 }
 
+impl NavKey {
+    pub fn title(&self) -> &'static str {
+        match self {
+            NavKey::Home => "财务概览",
+            NavKey::VoucherManagement
+            | NavKey::VoucherEntry
+            | NavKey::VoucherAudit
+            | NavKey::VoucherQuery => "凭证管理",
+            NavKey::AccountBalance => "科目余额",
+            NavKey::DetailedLedger => "明细账",
+            NavKey::GeneralLedger => "总账",
+            NavKey::TrialBalance => "试算平衡表",
+            NavKey::ReportCenter => "报表中心",
+            NavKey::AccountsReceivable => "应收管理",
+            NavKey::AccountsPayable => "应付管理",
+            NavKey::FixedAssets => "固定资产",
+            NavKey::CashierManagement => "出纳管理",
+            NavKey::BudgetManagement => "预算管理",
+            NavKey::TaxManagement => "税务管理",
+            NavKey::SystemSettings => "系统设置",
+        }
+    }
+
+    pub fn subtitle(&self) -> &'static str {
+        match self {
+            NavKey::VoucherManagement
+            | NavKey::VoucherEntry
+            | NavKey::VoucherAudit
+            | NavKey::VoucherQuery => "查看并管理所有会计凭证",
+            NavKey::AccountBalance => "查看各科目期初余额、本期发生额及期末余额",
+            NavKey::DetailedLedger => "查看各科目的明细账目记录",
+            NavKey::GeneralLedger => "查看总账科目汇总数据",
+            NavKey::TrialBalance => "检查科目借贷是否平衡",
+            NavKey::ReportCenter => "生成各类财务报表",
+            NavKey::AccountsReceivable => "管理应收账款及相关业务",
+            NavKey::AccountsPayable => "管理应付账款及相关业务",
+            _ => "",
+        }
+    }
+}
+
 impl Default for NavState {
     fn default() -> Self {
         Self::new()

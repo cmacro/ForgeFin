@@ -1,18 +1,17 @@
 use leptos::prelude::*;
+use lucide_leptos::LayoutPanelLeft;
 
 #[component]
 pub fn Placeholder(title: &'static str) -> impl IntoView {
     view! {
-        <section class="flex-1 flex items-center justify-center p-8">
-            <div class="text-center">
+        <div class="flex items-center justify-center h-full">
+            <div class="card p-8 text-center">
                 <div class="w-12 h-12 mx-auto rounded-md bg-surface-hover text-secondary flex items-center justify-center mb-3">
-                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M4 4h16v16H4zM4 9h16" stroke-linecap="round" />
-                    </svg>
+                    <LayoutPanelLeft size=24 />
                 </div>
-                <h2 class="text-lg font-semibold text-primary mb-1">{title}</h2>
-                <p class="text-sm text-secondary">"该模块正在建设中"</p>
+                <h2 class="card-title" style="font-size: 18px; margin-bottom: 4px">{title}</h2>
+                <p style="font-size: 14px; color: var(--color-tertiary)">"该模块正在建设中"</p>
             </div>
-        </section>
+        </div>
     }
 }

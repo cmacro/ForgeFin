@@ -24,37 +24,37 @@ pub fn Pagination(
     };
 
     view! {
-        <div class="flex items-center justify-between text-xs text-secondary px-3 py-2 border-t border-main bg-surface">
+        <div class="flex items-center justify-between text-xs px-3 py-2" style="color: var(--color-tertiary)">
             <span>
                 {format!("共 {} 条", total)}
             </span>
             <div class="flex items-center gap-1">
-                <select class="h-7 px-2 text-xs border border-main rounded bg-surface text-primary">
+                <select class="h-7 px-2 text-xs border rounded" style="border-color: var(--color-border); background: var(--color-surface); color: var(--color-primary)">
                     <option>{format!("{page_size}条/页")}</option>
                     <option>"50条/页"</option>
                     <option>"100条/页"</option>
                 </select>
-                <button class="w-7 h-7 border border-main rounded text-primary bg-surface hover:bg-surface-hover disabled:opacity-50">
+                <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
                     <span class="block leading-none">"‹"</span>
                 </button>
                 <For each=move || visible.clone() key=|p| *p let:p>
                     {if p == -1 {
-                        view! { <span class="px-1 text-disabled">"..."</span> }.into_any()
+                        view! { <span class="px-1" style="color: var(--color-disabled)">"..."</span> }.into_any()
                     } else if p == current {
                         view! {
-                            <button class="w-7 h-7 border border-brand rounded text-white bg-brand font-medium">
+                            <button class="w-7 h-7 border rounded font-medium text-white" style="border-color: var(--color-brand); background: var(--color-brand)">
                                 {p}
                             </button>
                         }.into_any()
                     } else {
                         view! {
-                            <button class="w-7 h-7 border border-main rounded text-primary bg-surface hover:bg-surface-hover">
+                            <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
                                 {p}
                             </button>
                         }.into_any()
                     }}
                 </For>
-                <button class="w-7 h-7 border border-main rounded text-primary bg-surface hover:bg-surface-hover">
+                <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
                     <span class="block leading-none">"›"</span>
                 </button>
                 <span class="ml-2 hidden md:inline">

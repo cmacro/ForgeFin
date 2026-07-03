@@ -1,15 +1,11 @@
 use leptos::prelude::*;
 
 use crate::components::charts::kpi_card::{KpiAccent, KpiCard};
-use crate::components::layout::breadcrumb::{Breadcrumb, Crumb};
 
 #[component]
 pub fn Dashboard() -> impl IntoView {
     view! {
-        <div class="flex flex-col gap-4 p-4 flex-1 overflow-auto">
-            <Breadcrumb crumbs=vec![Crumb { label: "首页" }] />
-            <h1 class="text-lg font-semibold text-primary">"财务概览"</h1>
-
+        <div class="flex flex-col gap-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KpiCard label="现金余额" value="¥ 1,280,500.00".to_string() unit=None accent=KpiAccent::Info />
                 <KpiCard label="应收账款" value="¥ 420,300.00".to_string() unit=None accent=KpiAccent::Success />
@@ -18,32 +14,38 @@ pub fn Dashboard() -> impl IntoView {
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div class="lg:col-span-2 bg-surface border border-main rounded-md shadow-sm p-4 min-h-64">
-                    <h3 class="text-sm font-medium text-primary mb-3">"本月收支趋势"</h3>
-                    <div class="h-48 flex items-end justify-around border-b border-muted">
-                        {bars()}
+                <div class="lg:col-span-2 card">
+                    <div class="card-header">
+                        <h3 class="card-title">"本月收支趋势"</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="h-48 flex items-end justify-around border-b border-muted">
+                            {bars()}
+                        </div>
                     </div>
                 </div>
-                <div class="bg-surface border border-main rounded-md shadow-sm p-4">
-                    <h3 class="text-sm font-medium text-primary mb-3">"待办事项"</h3>
-                    <ul class="space-y-2 text-sm">
-                        <li class="flex items-center justify-between py-2 border-b border-muted">
-                            <span class="text-primary">"待审核凭证"</span>
-                            <span class="text-warning font-medium">"12"</span>
-                        </li>
-                        <li class="flex items-center justify-between py-2 border-b border-muted">
-                            <span class="text-primary">"逾期应收"</span>
-                            <span class="text-danger font-medium">"5"</span>
-                        </li>
-                        <li class="flex items-center justify-between py-2 border-b border-muted">
-                            <span class="text-primary">"即将到期应付"</span>
-                            <span class="text-warning font-medium">"8"</span>
-                        </li>
-                        <li class="flex items-center justify-between py-2">
-                            <span class="text-primary">"月末结账"</span>
-                            <span class="text-info font-medium">"3"</span>
-                        </li>
-                    </ul>
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="text-sm font-medium text-primary mb-3">"待办事项"</h3>
+                        <ul class="space-y-2 text-sm">
+                            <li class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--color-border-light)">
+                                <span class="text-primary">"待审核凭证"</span>
+                                <span class="text-warning font-medium">"12"</span>
+                            </li>
+                            <li class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--color-border-light)">
+                                <span class="text-primary">"逾期应收"</span>
+                                <span class="text-danger font-medium">"5"</span>
+                            </li>
+                            <li class="flex items-center justify-between py-2" style="border-bottom: 1px solid var(--color-border-light)">
+                                <span class="text-primary">"即将到期应付"</span>
+                                <span class="text-warning font-medium">"8"</span>
+                            </li>
+                            <li class="flex items-center justify-between py-2">
+                                <span class="text-primary">"月末结账"</span>
+                                <span class="text-info font-medium">"3"</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>

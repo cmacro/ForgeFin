@@ -6,12 +6,11 @@ pub struct Crumb {
 }
 
 #[component]
-pub fn Breadcrumb(crumbs: Vec<Crumb>) -> impl IntoView {
+pub fn Breadcrumb(_crumbs: Vec<Crumb>) -> impl IntoView {
     view! {
-        <nav class="flex items-center text-sm gap-1.5 text-secondary">
-            <For each=move || crumbs.clone() key=|c| c.label let:c>
-                <span class="text-primary">{c.label}</span>
-                <span class="text-disabled">"/"</span>
+        <nav style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-tertiary)">
+            <For each=move || _crumbs.clone() key=|c| c.label let:crumb>
+                <span style="color: var(--color-primary)">{crumb.label}</span>
             </For>
         </nav>
     }

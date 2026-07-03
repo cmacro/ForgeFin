@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use lucide_leptos::X;
 
 #[derive(Clone)]
 pub struct TabItem {
@@ -13,24 +14,29 @@ pub fn Tabs(
     #[prop(default = "voucher_overview")] active_key: &'static str,
 ) -> impl IntoView {
     view! {
-        <div class="flex items-center gap-1 border-b border-main bg-surface px-2">
+        <div class="flex items-center gap-1"
+            style="border-bottom: 1px solid var(--color-border); background: var(--color-surface); padding: 0 24px; margin: -24px -24px 0 -24px"
+        >
             <For each=move || items.clone() key=|t| t.key let:tab>
                 {move || {
                     let key = tab.key;
                     let closable = tab.closable;
                     let is_active = key == active_key;
+                    let tab_style = if is_active {
+                        "color: var(--color-primary); border-color: var(--color-brand); font-weight: 500"
+                    } else {
+                        "color: var(--color-secondary); border-color: transparent"
+                    };
                     view! {
-                        <div
-                            class="group flex items-center gap-2 px-3 py-2 text-sm cursor-pointer border-b-2 -mb-px"
-                            class=("text-primary border-brand font-medium", is_active)
-                            class=("text-secondary border-transparent hover:text-primary", !is_active)
+                        <div class="group flex items-center gap-2 px-3 py-2 text-sm cursor-pointer"
+                            style=format!("border-bottom: 2px solid; margin-bottom: -1px; {}", tab_style)
                         >
                             <span>{tab.label}</span>
                             {closable.then(|| view! {
-                                <button class="w-4 h-4 flex items-center justify-center rounded text-disabled hover:bg-surface-hover hover:text-primary opacity-0 group-hover:opacity-100">
-                                    <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <path d="M3 3l6 6M9 3l-6 6" stroke-linecap="round" />
-                                    </svg>
+                                <button class="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100"
+                                    style="color: var(--color-disabled)"
+                                >
+                                    <X size=12 />
                                 </button>
                             })}
                         </div>
