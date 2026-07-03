@@ -1,0 +1,48 @@
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 16px;
+    font-size: 14px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .btn-primary {
+    background: var(--color-brand);
+    color: #ffffff;
+    border: none;
+  }
+
+  .btn-primary:hover {
+    background: var(--color-brand-hover);
+  }
+
+  .btn-outline {
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
+    border: 1px solid var(--color-border);
+  }
+
+  .btn-outline:hover {
+    background: var(--color-surface-active);
+  }
+
+  .btn-sm {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 13px;
+    gap: 4px;
+  }
+
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-secondary);
+  }
+}

@@ -3,6 +3,44 @@
      Utilities
   =========================== */
 
+  /* ===========================
+     Text Colors
+  =========================== */
+  .text-primary { color: var(--color-primary); }
+  .text-secondary { color: var(--color-secondary); }
+  .text-tertiary { color: var(--color-tertiary); }
+  .text-disabled { color: var(--color-disabled); }
+  .text-brand { color: var(--color-brand); }
+  .text-success { color: var(--color-success); }
+  .text-warning { color: var(--color-warning); }
+  .text-danger { color: var(--color-danger); }
+  .text-info { color: var(--color-info); }
+
+  /* ===========================
+     Background Colors
+  =========================== */
+  .bg-surface { background: var(--color-surface); }
+  .bg-surface-alt { background: var(--color-surface-alt); }
+  .bg-surface-hover { background: var(--color-surface-hover); }
+  .bg-brand { background: var(--color-brand); }
+  .bg-border { background: var(--color-border); }
+  .bg-main { background: var(--color-main); }
+
+  /* ===========================
+     Border Colors
+  =========================== */
+  .border-border { border-color: var(--color-border); }
+  .border-border-light { border-color: var(--color-border-light); }
+  .border-surface { border-color: var(--color-surface); }
+  .border-brand { border-color: var(--color-brand); }
+  .border-transparent { border-color: transparent; }
+
+  /* ===========================
+     Font Sizes (px-based, matching theme component classes)
+  =========================== */
+  .text-12 { font-size: 12px; }
+  .text-13 { font-size: 13px; }
+
   .text-num {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";

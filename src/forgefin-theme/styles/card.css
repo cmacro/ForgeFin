@@ -77,4 +77,95 @@
   .stat-card-delta.down {
     color: var(--color-danger);
   }
+
+  /* ===========================
+     Detail Field
+  =========================== */
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .detail-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .detail-field-label {
+    width: 64px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--color-tertiary);
+  }
+
+  .detail-field-value {
+    height: 28px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-alt);
+    color: var(--color-primary);
+  }
+
+  .detail-field-value.highlight {
+    color: var(--color-success);
+    font-weight: 500;
+  }
+
+  .detail-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 12px 0;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  /* ===========================
+     Log Entry
+  =========================== */
+
+  .log-entry {
+    position: relative;
+    padding-left: 24px;
+  }
+
+  .log-entry-dot {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    border: 2px solid var(--color-surface);
+  }
+
+  .log-entry-title {
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+
+  .log-entry-meta {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .log-entry-comment {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--color-tertiary);
+  }
 }

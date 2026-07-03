@@ -42,7 +42,6 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
     let label = item.label;
     let is_expanded = move || nav.is_expanded(item_key);
     let is_active = move || nav.is_active(item_key);
-    let depth_style = if depth > 0 { "padding-left: 32px" } else { "" };
     let depth_for_child = depth + 1;
 
     view! {
@@ -64,7 +63,7 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
                         </Show>
                     </div>
                     <Show when=move || is_expanded() && !collapsed.get()>
-                        <ul style="padding: 4px 0">
+                        <ul class="py-4">
                             <For each=move || children_stored.get_value().unwrap_or_default() key=|child| child.label let:child>
                                 <NavItemRow item=child nav=nav_child.clone() depth=depth_for_child />
                             </For>
@@ -76,7 +75,7 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
                     <div
                         class="sidebar-item"
                         class=("active", is_active)
-                        style=depth_style
+                        class=("pl-32", depth > 0)
                         on:click=move |_| nav_expand.activate(item_key)
                     >
                         <span class="sidebar-item-icon">

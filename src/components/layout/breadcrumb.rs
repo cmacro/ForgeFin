@@ -8,9 +8,9 @@ pub struct Crumb {
 #[component]
 pub fn Breadcrumb(_crumbs: Vec<Crumb>) -> impl IntoView {
     view! {
-        <nav style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-tertiary)">
+        <nav class="flex items-center gap-6 text-13 text-tertiary">
             <For each=move || _crumbs.clone() key=|c| c.label let:crumb>
-                <span style="color: var(--color-primary)">{crumb.label}</span>
+                <span class="text-primary">{crumb.label}</span>
             </For>
         </nav>
     }

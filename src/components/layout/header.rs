@@ -35,12 +35,12 @@ pub fn Header(nav: NavState) -> impl IntoView {
                 <span class="header-action" title="消息" aria-label="消息">
                     <MessageSquare size=18 />
                 </span>
-                <div class="w-px h-6" style="background: var(--color-border)"></div>
+                <div class="w-px h-6 bg-border"></div>
                 <div class="flex items-center gap-2 cursor-pointer">
                     <span class="header-avatar">"张"</span>
                     <div class="hidden md:block text-sm leading-tight">
-                        <div style="color: var(--color-primary); font-weight: 500">"张会计"</div>
-                        <div style="color: var(--color-tertiary); font-size: 12px">"财务部"</div>
+                        <div class="text-primary font-medium">"张会计"</div>
+                        <div class="text-tertiary text-12">"财务部"</div>
                     </div>
                 </div>
             </div>

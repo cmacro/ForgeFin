@@ -117,9 +117,9 @@ pub fn VoucherManagement() -> impl IntoView {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
                 <div class="data-table flex flex-col min-h-0">
                     <DataTable rows=rows_for_table on_select=set_selected_action />
-                    <div style="border-top: 1px solid var(--color-border-light)">
-                        <Pagination total=245 current=1 page_size=20 />
-                    </div>
+                        <div class="border-t border-border-light">
+                            <Pagination total=245 current=1 page_size=20 />
+                        </div>
                 </div>
                 <VoucherDetail rows=rows_for_detail selected=selected />
             </div>
@@ -154,9 +154,9 @@ fn SummaryStats() -> impl IntoView {
 #[component]
 fn ActionBar() -> impl IntoView {
     view! {
-        <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center gap-2 flex-wrap">
-                <button class="h-8 px-3 text-sm rounded-md text-white" style="background: var(--color-brand); display: inline-flex; align-items: center; gap: 4px">
+        <div class="action-bar">
+            <div class="action-bar-group">
+                <button class="btn btn-primary">
                     <Plus size=14 />
                     "新增凭证"
                 </button>
@@ -186,13 +186,8 @@ fn ActionBar() -> impl IntoView {
 #[component]
 fn ActionButton(label: &'static str, children: ChildrenFn) -> impl IntoView {
     view! {
-        <button
-            class="h-8 px-3 text-sm border rounded-md"
-            style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface); display: inline-flex; align-items: center; gap: 6px"
-        >
-            <span style="color: var(--color-secondary); display: inline-flex; align-items: center; justify-content: center">
-                {children()}
-            </span>
+        <button class="btn btn-outline gap-6">
+            {children()}
             {label}
         </button>
     }
@@ -221,10 +216,10 @@ fn DataTable(rows: Vec<VoucherRow>, on_select: WriteSignal<usize>) -> impl IntoV
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 40px; text-align: center">
-                            <input type="checkbox" class="form-input" style="width: 14px; height: 14px" />
+                        <th class="w-40 text-center">
+                            <input type="checkbox" class="form-input w-14 h-14" />
                         </th>
-                        <th style="width: 48px; text-align: center">"序号"</th>
+                        <th class="w-48 text-center">"序号"</th>
                         <th>"凭证字号"</th>
                         <th>"凭证日期"</th>
                         <th>"摘要"</th>
@@ -233,8 +228,8 @@ fn DataTable(rows: Vec<VoucherRow>, on_select: WriteSignal<usize>) -> impl IntoV
                         <th class="data-table-num">"贷方金额"</th>
                         <th>"制单人"</th>
                         <th>"审核人"</th>
-                        <th style="text-align: center">"审核状态"</th>
-                        <th style="text-align: center; border-left: 1px solid var(--color-border)">"操作"</th>
+                        <th class="text-center">"审核状态"</th>
+                        <th class="text-center border-l border-border">"操作"</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -256,7 +251,7 @@ fn DataTable(rows: Vec<VoucherRow>, on_select: WriteSignal<usize>) -> impl IntoV
             {move || {
                 if total_rows == 0 {
                     view! {
-                        <div style="text-align: center; color: var(--color-tertiary); padding: 40px 0; font-size: 14px">"暂无数据"</div>
+                        <div class="text-center py-40 text-tertiary">"暂无数据"</div>
                     }.into_any()
                 } else {
                     view! { <></> }.into_any()
@@ -275,11 +270,10 @@ fn RowItem(row: VoucherRow, index: usize, on_select: WriteSignal<usize>) -> impl
         <tr
             on:click=move |_| on_select.set(index.saturating_sub(1))
         >
-            <td style="text-align: center" on:click=move |ev| ev.stop_propagation()>
+            <td class="text-center" on:click=move |ev| ev.stop_propagation()>
                 <input
                     type="checkbox"
-                    class="form-input"
-                    style="width: 14px; height: 14px"
+                    class="form-input w-14 h-14"
                     prop:checked=checked
                     on:change=move |ev| set_checked.set(event_target_checked(&ev))
                 />
@@ -293,14 +287,14 @@ fn RowItem(row: VoucherRow, index: usize, on_select: WriteSignal<usize>) -> impl
             <td class="data-table-num">{row.credit}</td>
             <td>{row.operator}</td>
             <td>{row.auditor}</td>
-            <td style="text-align: center">
+            <td class="text-center">
                 <Badge label=status_for_badge variant=variant />
             </td>
-            <td style="text-align: center; border-left: 1px solid var(--color-border)" on:click=move |ev| ev.stop_propagation()>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 4px">
-                    <button class="text-xs" style="color: var(--color-brand)">"查看"</button>
-                    <button class="text-xs" style="color: var(--color-secondary)">"复制"</button>
-                    <button class="text-xs inline-flex items-center gap-0.5" style="color: var(--color-secondary)">
+            <td class="text-center border-l border-border" on:click=move |ev| ev.stop_propagation()>
+                <div class="flex items-center justify-center gap-4">
+                    <button class="text-xs text-brand">"查看"</button>
+                    <button class="text-xs text-secondary">"复制"</button>
+                    <button class="text-xs inline-flex items-center gap-0.5 text-secondary">
                         "更多"
                         <ChevronDown size=10 />
                     </button>
@@ -369,13 +363,13 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                     {move || voucher_no.get()}
                     "）"
                 </span>
-                <button class="h-7 px-3 text-xs border rounded-md inline-flex items-center gap-1" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface)">
+                <button class="btn btn-outline btn-sm">
                     <Pencil size=12 />
                     "编辑"
                 </button>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 p-3 text-sm" style="border-bottom: 1px solid var(--color-border-light)">
+            <div class="detail-grid">
                 <DetailField label="凭证类型" value="记账凭证".to_string() />
                 <DetailFieldReactive label="凭证日期" value=voucher_date />
                 <DetailFieldReactive label="凭证字号" value=voucher_no />
@@ -384,17 +378,17 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                 <DetailField label="审核状态" value="已审核".to_string() highlight=true />
             </div>
 
-            <div class="flex items-center gap-2 px-3 pt-3 text-xs flex-wrap">
+            <div class="detail-chips">
                 <DetailChip label="制单人" value="张会计" />
                 <DetailChip label="审核人" value="李主管" />
                 <DetailChip label="审核日期" value="2024-06-03" />
             </div>
 
             <div class="flex-1 overflow-auto p-3">
-                <table class="data-table" style="border: none">
+                <table class="data-table border-none">
                     <thead>
                         <tr>
-                            <th style="width: 40px; text-align: center">"序号"</th>
+                            <th class="w-40 text-center">"序号"</th>
                             <th>"科目编码"</th>
                             <th>"科目名称"</th>
                             <th>"辅助核算"</th>
@@ -413,7 +407,7 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                                 <td class="data-table-num">{entry.5}</td>
                             </tr>
                         </For>
-                        <tr style="background: var(--color-surface-alt)">
+                        <tr class="bg-surface-alt">
                             <td class="text-secondary font-medium">"合计"</td>
                             <td></td>
                             <td></td>
@@ -425,15 +419,15 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                 </table>
             </div>
 
-            <div class="card-footer justify-between text-xs" style="color: var(--color-tertiary)">
+            <div class="card-footer justify-between text-xs text-tertiary">
                 <div class="flex items-center gap-4 flex-wrap">
                     <span>"制单: 张会计　2024-06-03"</span>
                     <span>"审核: 李主管　2024-06-03"</span>
                 </div>
             </div>
 
-            <div style="border-top: 1px solid var(--color-border)">
-                <div class="flex items-center justify-between px-3" style="border-bottom: 1px solid var(--color-border-light)">
+            <div class="border-t border-border">
+                <div class="flex items-center justify-between px-3 border-b border-border-light">
                     <div class="flex">
                         <TabButton label="附件 (0)" active=false />
                         <TabButtonReactive
@@ -450,14 +444,14 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                 </div>
                 <div class="p-4 space-y-4 text-sm flex-1 overflow-auto">
                     <LogEntry
-                        dot_color="#00b42a"
+                        dot_color="var(--color-success)"
                         title="审核通过"
                         user="李主管"
                         timestamp="2024-06-03 10:30:15"
                         comment="审核意见：凭证完整,金额正确,予以通过。"
                     />
                     <LogEntry
-                        dot_color="#1677ff"
+                        dot_color="var(--color-brand)"
                         title="提交审核"
                         user="张会计"
                         timestamp="2024-06-03 09:15:22"
@@ -476,12 +470,11 @@ fn DetailField(
     #[prop(default = false)] highlight: bool,
 ) -> impl IntoView {
     view! {
-        <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
-            <span style="font-size: 12px; color: var(--color-tertiary); flex-shrink: 0; width: 64px">{label}</span>
-            <span style=format!(
-                "height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); min-width: 0; flex: 1; {}",
-                if highlight { "color: var(--color-success); font-weight: 500" } else { "color: var(--color-primary)" }
-            )>{value}</span>
+        <div class="detail-field">
+            <span class="detail-field-label">{label}</span>
+            <span class="detail-field-value"
+                class=("highlight", highlight)
+            >{value}</span>
         </div>
     }
 }
@@ -493,12 +486,11 @@ fn DetailFieldReactive(
     #[prop(default = false)] highlight: bool,
 ) -> impl IntoView {
     view! {
-        <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
-            <span style="font-size: 12px; color: var(--color-tertiary); flex-shrink: 0; width: 64px">{label}</span>
-            <span style=format!(
-                "height: 28px; padding: 0 8px; display: flex; align-items: center; font-size: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); min-width: 0; flex: 1; {}",
-                if highlight { "color: var(--color-success); font-weight: 500" } else { "color: var(--color-primary)" }
-            )>{move || value.get()}</span>
+        <div class="detail-field">
+            <span class="detail-field-label">{label}</span>
+            <span class="detail-field-value"
+                class=("highlight", highlight)
+            >{move || value.get()}</span>
         </div>
     }
 }
@@ -507,9 +499,9 @@ fn DetailFieldReactive(
 fn DetailChip(label: &'static str, value: &'static str) -> impl IntoView {
     let colon = ":";
     view! {
-        <span class="tag" style="background: var(--color-surface-alt)">
-            <span style="color: var(--color-tertiary)">{label}{colon}</span>
-            <span style="color: var(--color-primary); font-weight: 500">{value}</span>
+        <span class="tag bg-surface-alt">
+            <span class="text-tertiary">{label}{colon}</span>
+            <span class="text-primary font-medium">{value}</span>
         </span>
     }
 }
@@ -517,15 +509,8 @@ fn DetailChip(label: &'static str, value: &'static str) -> impl IntoView {
 #[component]
 fn TabButton(label: &'static str, active: bool) -> impl IntoView {
     view! {
-        <button
-            class="px-3 py-2 text-xs cursor-pointer"
-            style=move || {
-                if active {
-                    "color: var(--color-primary); border-bottom: 2px solid var(--color-brand); font-weight: 500; margin-bottom: -1px"
-                } else {
-                    "color: var(--color-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px"
-                }
-            }
+        <button class="tab-bar-item"
+            class=("tab-bar-item-active", active)
         >
             {label}
         </button>
@@ -540,15 +525,8 @@ fn TabButtonReactive(
 ) -> impl IntoView {
     let cb = on_click.clone();
     view! {
-        <button
-            class="px-3 py-2 text-xs cursor-pointer"
-            style=move || {
-                if active.get() {
-                    "color: var(--color-primary); border-bottom: 2px solid var(--color-brand); font-weight: 500; margin-bottom: -1px"
-                } else {
-                    "color: var(--color-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px"
-                }
-            }
+        <button class="tab-bar-item"
+            class=("tab-bar-item-active", move || active.get())
             on:click=move |_| cb()
         >
             {label}
@@ -565,14 +543,14 @@ fn LogEntry(
     comment: &'static str,
 ) -> impl IntoView {
     view! {
-        <div style="position: relative; padding-left: 24px">
-            <span style=format!("position: absolute; left: 6px; top: 6px; width: 10px; height: 10px; border-radius: 999px; background: {dot_color}; border: 2px solid var(--color-surface)")></span>
-            <div style="font-size: 14px; color: var(--color-primary); font-weight: 500">{title}</div>
-            <div style="margin-top: 4px; display: flex; align-items: center; gap: 8px; font-size: 12px">
-                <span style="color: var(--color-primary); font-weight: 500">{user}</span>
-                <span style="color: var(--color-tertiary)">{timestamp}</span>
+        <div class="log-entry">
+            <span class="log-entry-dot" style=format!("background: {dot_color}")></span>
+            <div class="log-entry-title">{title}</div>
+            <div class="log-entry-meta">
+                <span class="text-primary font-medium">{user}</span>
+                <span class="text-tertiary">{timestamp}</span>
             </div>
-            <div style="margin-top: 4px; font-size: 12px; color: var(--color-tertiary)">{comment}</div>
+            <div class="log-entry-comment">{comment}</div>
         </div>
     }
 }

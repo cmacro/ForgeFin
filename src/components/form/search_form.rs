@@ -66,13 +66,13 @@ pub fn SearchForm(
                                         class="form-input flex-1"
                                         placeholder="2024-06-01"
                                     />
-                                    <span style="color: var(--color-disabled); font-size: 12px">"~"</span>
+                                    <span class="text-disabled">"~"</span>
                                     <input
                                         type="text"
                                         class="form-input flex-1"
                                         placeholder="2024-06-30"
                                     />
-                                    <span style="color: var(--color-tertiary); display: inline-flex; align-items: center; flex-shrink: 0">
+                                    <span class="text-tertiary inline-flex items-center flex-shrink-0">
                                         <Calendar size=16 />
                                     </span>
                                 </div>
@@ -94,8 +94,7 @@ pub fn SearchForm(
             <div class="flex items-center justify-between mt-3">
                 <Show when=move || expandable>
                     <button
-                        class="inline-flex items-center gap-1 text-xs"
-                        style="color: var(--color-secondary)"
+                        class="inline-flex items-center gap-1 text-xs text-secondary"
                         on:click=move |_| set_expanded.update(|v| *v = !*v)
                     >
                         <span class="inline-flex items-center justify-center transition-transform" class=("rotate-180", expanded)>
@@ -107,18 +106,10 @@ pub fn SearchForm(
                     </button>
                 </Show>
                 <div class="flex items-center gap-2 ml-auto">
-                    <button
-                        class="h-8 px-4 text-sm border rounded-md"
-                        style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface)"
-                        on:click=move |_| reset()
-                    >
+                    <button class="btn btn-outline" on:click=move |_| reset()>
                         "重置"
                     </button>
-                    <button
-                        class="h-8 px-4 text-sm rounded-md text-white"
-                        style="background: var(--color-brand)"
-                        on:click=move |_| search()
-                    >
+                    <button class="btn btn-primary" on:click=move |_| search()>
                         "查询"
                     </button>
                 </div>

@@ -48,4 +48,63 @@
     color: var(--color-tertiary);
     margin-top: 2px;
   }
+
+  /* ===========================
+     Action Bar
+  =========================== */
+
+  .action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+  }
+
+  .action-bar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ===========================
+     Tab Bar
+  =========================== */
+
+  .tab-bar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 2px solid;
+    margin-bottom: -1px;
+    color: var(--color-secondary);
+    border-color: transparent;
+  }
+
+  .tab-bar-item-active {
+    color: var(--color-primary);
+    border-color: var(--color-brand);
+    font-weight: 500;
+  }
+
+  .tab-btn-close {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    color: var(--color-disabled);
+    transition: opacity var(--transition-fast);
+  }
+
+  .tab-bar-item:hover .tab-btn-close {
+    opacity: 1;
+  }
 }
