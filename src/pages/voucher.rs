@@ -102,7 +102,7 @@ pub fn VoucherManagement() -> impl IntoView {
     view! {
         <Tabs items=tabs active_key="voucher_management" />
 
-        <div class="flex flex-col gap-4 flex-1">
+        <div class="page-content">
             <SearchForm
                 fields=fields
                 on_search=std::rc::Rc::new(move || {})
@@ -420,7 +420,7 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
             </div>
 
             <div class="card-footer justify-between text-xs text-tertiary">
-                <div class="flex items-center gap-4 flex-wrap">
+                <div class="detail-footer">
                     <span>"制单: 张会计　2024-06-03"</span>
                     <span>"审核: 李主管　2024-06-03"</span>
                 </div>

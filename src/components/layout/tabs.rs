@@ -14,7 +14,7 @@ pub fn Tabs(
     #[prop(default = "voucher_overview")] active_key: &'static str,
 ) -> impl IntoView {
     view! {
-        <div class="flex items-center gap-1 px-24 -mx-24 -mt-24 border-b border-border bg-surface">
+        <div class="tab-bar">
             <For each=move || items.clone() key=|t| t.key let:tab>
                 {move || {
                     let key = tab.key;

@@ -91,13 +91,13 @@ pub fn SearchForm(
                     </div>
                 </For>
             </div>
-            <div class="flex items-center justify-between mt-3">
+            <div class="search-form-actions">
                 <Show when=move || expandable>
                     <button
-                        class="inline-flex items-center gap-1 text-xs text-secondary"
+                        class="search-form-toggle"
                         on:click=move |_| set_expanded.update(|v| *v = !*v)
                     >
-                        <span class="inline-flex items-center justify-center transition-transform" class=("rotate-180", expanded)>
+                        <span class="chevron" class=("rotated", expanded)>
                             <Show when=move || expanded.get() fallback=|| view! { <ChevronDown size=12 /> }>
                                 <ChevronUp size=12 />
                             </Show>
@@ -105,7 +105,7 @@ pub fn SearchForm(
                         {move || if expanded.get() { "收起" } else { "更多条件" }}
                     </button>
                 </Show>
-                <div class="flex items-center gap-2 ml-auto">
+                <div class="search-form-btn-group">
                     <button class="btn btn-outline" on:click=move |_| reset()>
                         "重置"
                     </button>

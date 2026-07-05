@@ -158,4 +158,66 @@
   .todo-item:last-child {
     border-bottom: none;
   }
+
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+  }
+
+  .user-profile-info {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .user-profile-info {
+      display: block;
+    }
+
+    .user-profile-info .name {
+      font-size: var(--text-sm);
+      line-height: 1.25;
+      color: var(--color-primary);
+      font-weight: 500;
+    }
+
+    .user-profile-info .dept {
+      font-size: 12px;
+      color: var(--color-tertiary);
+    }
+  }
+
+  .search-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 3px;
+  }
+
+  .search-form-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+  }
+
+  .search-form-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    font-size: 12px;
+    color: var(--color-secondary);
+  }
+
+  .search-form-toggle .chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--transition-fast);
+  }
+
+  .search-form-toggle .chevron.rotated {
+    transform: rotate(180deg);
+  }
 }

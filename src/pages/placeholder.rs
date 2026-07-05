@@ -6,7 +6,7 @@ pub fn Placeholder(title: &'static str) -> impl IntoView {
     view! {
         <div class="flex items-center justify-center h-full">
             <div class="card p-8 text-center">
-                <div class="w-12 h-12 mx-auto rounded-md bg-surface-hover text-secondary flex items-center justify-center mb-3">
+                <div class="placeholder-icon">
                     <LayoutPanelLeft size=24 />
                 </div>
                 <h2 class="page-title mb-4">{title}</h2>

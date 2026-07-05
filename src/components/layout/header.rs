@@ -36,11 +36,11 @@ pub fn Header(nav: NavState) -> impl IntoView {
                     <MessageSquare size=18 />
                 </span>
                 <div class="w-px h-6 bg-border"></div>
-                <div class="flex items-center gap-2 cursor-pointer">
+                <div class="user-profile">
                     <span class="header-avatar">"张"</span>
-                    <div class="hidden md:block text-sm leading-tight">
-                        <div class="text-primary font-medium">"张会计"</div>
-                        <div class="text-tertiary text-12">"财务部"</div>
+                    <div class="user-profile-info">
+                        <div class="name">"张会计"</div>
+                        <div class="dept">"财务部"</div>
                     </div>
                 </div>
             </div>

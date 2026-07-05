@@ -36,7 +36,7 @@ pub fn KpiCard(
 ) -> impl IntoView {
     view! {
         <div class="card stat-card">
-            <div class="flex items-center gap-3 mb-2">
+            <div class="stat-card-header">
                 <div class="stat-card-icon">
                     {accent.icon()}
                 </div>
