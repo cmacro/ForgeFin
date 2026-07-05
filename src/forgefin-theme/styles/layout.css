@@ -49,6 +49,23 @@
     margin-top: 2px;
   }
 
+  .page-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+
+  .tab-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 24px;
+    margin: -24px -24px 0 -24px;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
   /* ===========================
      Action Bar
   =========================== */
@@ -106,5 +123,39 @@
 
   .tab-bar-item:hover .tab-btn-close {
     opacity: 1;
+  }
+
+  /* ===========================
+     Page Grid
+  =========================== */
+
+  .page-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .page-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  /* ===========================
+     Todo List
+  =========================== */
+
+  .todo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .todo-item:last-child {
+    border-bottom: none;
   }
 }

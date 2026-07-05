@@ -114,7 +114,7 @@ pub fn VoucherManagement() -> impl IntoView {
 
             <ActionBar />
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
+            <div class="page-grid">
                 <div class="data-table flex flex-col min-h-0">
                     <DataTable rows=rows_for_table on_select=set_selected_action />
                         <div class="border-t border-border-light">
@@ -427,7 +427,7 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
             </div>
 
             <div class="border-t border-border">
-                <div class="flex items-center justify-between px-3 border-b border-border-light">
+                <div class="detail-tab-header">
                     <div class="flex">
                         <TabButton label="附件 (0)" active=false />
                         <TabButtonReactive
@@ -442,7 +442,7 @@ fn VoucherDetail(rows: Vec<VoucherRow>, selected: ReadSignal<usize>) -> impl Int
                         />
                     </div>
                 </div>
-                <div class="p-4 space-y-4 text-sm flex-1 overflow-auto">
+                <div class="detail-log-area">
                     <LogEntry
                         dot_color="var(--color-success)"
                         title="审核通过"

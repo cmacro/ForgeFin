@@ -37,7 +37,7 @@ pub fn KpiCard(
     view! {
         <div class="card stat-card">
             <div class="flex items-center gap-3 mb-2">
-                <div class="w-9 h-9 flex items-center justify-center rounded-md bg-surface-hover text-secondary">
+                <div class="stat-card-icon">
                     {accent.icon()}
                 </div>
                 <span class="stat-card-label">{label}</span>

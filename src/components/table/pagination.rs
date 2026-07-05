@@ -24,40 +24,40 @@ pub fn Pagination(
     };
 
     view! {
-        <div class="flex items-center justify-between text-xs px-3 py-2" style="color: var(--color-tertiary)">
+        <div class="pagination">
             <span>
                 {format!("共 {} 条", total)}
             </span>
-            <div class="flex items-center gap-1">
-                <select class="h-7 px-2 text-xs border rounded" style="border-color: var(--color-border); background: var(--color-surface); color: var(--color-primary)">
+            <div class="pagination-controls">
+                <select class="pagination-select">
                     <option>{format!("{page_size}条/页")}</option>
                     <option>"50条/页"</option>
                     <option>"100条/页"</option>
                 </select>
-                <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
+                <button class="pagination-btn">
                     <span class="block leading-none">"‹"</span>
                 </button>
                 <For each=move || visible.clone() key=|p| *p let:p>
                     {if p == -1 {
-                        view! { <span class="px-1" style="color: var(--color-disabled)">"..."</span> }.into_any()
+                        view! { <span class="pagination-ellipsis">"..."</span> }.into_any()
                     } else if p == current {
                         view! {
-                            <button class="w-7 h-7 border rounded font-medium text-white" style="border-color: var(--color-brand); background: var(--color-brand)">
+                            <button class="pagination-btn pagination-btn-active">
                                 {p}
                             </button>
                         }.into_any()
                     } else {
                         view! {
-                            <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
+                            <button class="pagination-btn">
                                 {p}
                             </button>
                         }.into_any()
                     }}
                 </For>
-                <button class="w-7 h-7 border rounded" style="border-color: var(--color-border); color: var(--color-primary); background: var(--color-surface);">
+                <button class="pagination-btn">
                     <span class="block leading-none">"›"</span>
                 </button>
-                <span class="ml-2 hidden md:inline">
+                <span class="pagination-jump">
                     {format!("前往 {} 页", current)}
                 </span>
             </div>

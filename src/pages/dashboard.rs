@@ -28,19 +28,19 @@ pub fn Dashboard() -> impl IntoView {
                     <div class="card-body">
                         <h3 class="text-sm font-medium text-primary mb-3">"待办事项"</h3>
                         <ul class="space-y-2 text-sm">
-                            <li class="flex items-center justify-between py-2 border-b border-border-light">
+                            <li class="todo-item">
                                 <span class="text-primary">"待审核凭证"</span>
                                 <span class="text-warning font-medium">"12"</span>
                             </li>
-                            <li class="flex items-center justify-between py-2 border-b border-border-light">
+                            <li class="todo-item">
                                 <span class="text-primary">"逾期应收"</span>
                                 <span class="text-danger font-medium">"5"</span>
                             </li>
-                            <li class="flex items-center justify-between py-2 border-b border-border-light">
+                            <li class="todo-item">
                                 <span class="text-primary">"即将到期应付"</span>
                                 <span class="text-warning font-medium">"8"</span>
                             </li>
-                            <li class="flex items-center justify-between py-2">
+                            <li class="todo-item">
                                 <span class="text-primary">"月末结账"</span>
                                 <span class="text-info font-medium">"3"</span>
                             </li>

@@ -12,7 +12,7 @@ pub fn Sidebar(nav: NavState) -> impl IntoView {
             class=("collapsed", move || nav.collapsed.get())
         >
             <div class="sidebar-logo">
-                <div class="sidebar-logo-icon w-8 h-8 rounded-md bg-brand flex items-center justify-center text-white text-sm font-semibold">
+                <div class="sidebar-logo-icon">
                     "FF"
                 </div>
                 <Show when=move || !nav.collapsed.get()>
