@@ -93,6 +93,7 @@ Follow existing project patterns and Rust/Leptos best practices.
 - All forms should use consistent validation patterns
 - Financial calculations must use precise decimal types
 - Components should be as pure as possible with minimal side effects
+- **No ORM** — use `rusqlite` directly with raw SQL. Keep the data layer simple and explicit
 
 **Avoid:**
 - Large-scale refactoring unless explicitly requested
