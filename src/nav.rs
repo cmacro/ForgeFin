@@ -7,6 +7,8 @@ pub enum NavKey {
     VoucherEntry,
     VoucherAudit,
     VoucherQuery,
+    ChartOfAccounts,
+    Contacts,
     AccountBalance,
     DetailedLedger,
     GeneralLedger,
@@ -72,6 +74,20 @@ pub fn nav_tree() -> Vec<NavItem> {
                     label: "凭证查询",
                     icon: "search",
                     route: "/general-ledger/voucher/query",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::ChartOfAccounts,
+                    label: "会计科目",
+                    icon: "scale",
+                    route: "/general-ledger/accounts",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::Contacts,
+                    label: "客户/供应商",
+                    icon: "users",
+                    route: "/contacts",
                     children: None,
                 },
                 NavItem {
@@ -217,6 +233,8 @@ impl NavKey {
             | NavKey::VoucherEntry
             | NavKey::VoucherAudit
             | NavKey::VoucherQuery => "凭证管理",
+            NavKey::ChartOfAccounts => "会计科目",
+            NavKey::Contacts => "客户/供应商",
             NavKey::AccountBalance => "科目余额",
             NavKey::DetailedLedger => "明细账",
             NavKey::GeneralLedger => "总账",
@@ -238,6 +256,8 @@ impl NavKey {
             | NavKey::VoucherEntry
             | NavKey::VoucherAudit
             | NavKey::VoucherQuery => "查看并管理所有会计凭证",
+            NavKey::ChartOfAccounts => "维护本公司会计科目表(按账套隔离)",
+            NavKey::Contacts => "维护客户与供应商基础信息(按账套隔离)",
             NavKey::AccountBalance => "查看各科目期初余额、本期发生额及期末余额",
             NavKey::DetailedLedger => "查看各科目的明细账目记录",
             NavKey::GeneralLedger => "查看总账科目汇总数据",
@@ -245,6 +265,7 @@ impl NavKey {
             NavKey::ReportCenter => "生成各类财务报表",
             NavKey::AccountsReceivable => "管理应收账款及相关业务",
             NavKey::AccountsPayable => "管理应付账款及相关业务",
+            NavKey::SystemSettings => "账套、用户与备份管理",
             _ => "",
         }
     }

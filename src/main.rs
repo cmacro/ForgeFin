@@ -1,5 +1,7 @@
 mod app;
+mod auth;
 mod components;
+mod ipc;
 mod nav;
 mod pages;
 

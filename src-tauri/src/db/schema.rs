@@ -1,0 +1,180 @@
+use rusqlite::Connection;
+
+/// 初始化系统库 schema。
+///
+/// 系统库 `forgefin_system.db` 存放跨公司共享的注册信息:
+/// - users: 用户(可跨公司)
+/// - companies: 公司/账套注册
+/// - user_company_permissions: 用户在某公司的权限
+pub fn init_system(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS users (
+            id              TEXT PRIMARY KEY,
+            username        TEXT NOT NULL UNIQUE,
+            display_name    TEXT NOT NULL,
+            password_hash   TEXT NOT NULL,
+            department      TEXT,
+            is_admin        INTEGER NOT NULL DEFAULT 0,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS companies (
+            id              TEXT PRIMARY KEY,
+            name            TEXT NOT NULL,
+            tax_id          TEXT,
+            legal_person    TEXT,
+            address         TEXT,
+            phone           TEXT,
+            currency        TEXT NOT NULL DEFAULT 'CNY',
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS user_company_permissions (
+            id              TEXT PRIMARY KEY,
+            user_id         TEXT NOT NULL,
+            company_id      TEXT NOT NULL,
+            role            TEXT NOT NULL DEFAULT 'accountant',
+            can_audit       INTEGER NOT NULL DEFAULT 0,
+            can_post         INTEGER NOT NULL DEFAULT 0,
+            can_manage      INTEGER NOT NULL DEFAULT 0,
+            can_backup      INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            UNIQUE (user_id, company_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ucp_user
+            ON user_company_permissions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_ucp_company
+            ON user_company_permissions(company_id);
+        ",
+    )
+    .map_err(|e| format!("系统库建表失败: {e}"))?;
+    Ok(())
+}
+
+/// 初始化公司库 schema。
+///
+/// 每个公司库 `forgefin_company_{id}.db` 存放该公司全部业务数据:
+/// - accounts: 会计科目(树形,parent_id 自引用)
+/// - contacts: 客户/供应商
+/// - vouchers: 凭证主表
+/// - voucher_entries: 凭证分录
+/// - voucher_audit_logs: 审核日志
+pub fn init_company(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS accounts (
+            id              TEXT PRIMARY KEY,
+            code            TEXT NOT NULL,
+            name            TEXT NOT NULL,
+            parent_id       TEXT,
+            account_type    TEXT NOT NULL,
+            balance_direction TEXT NOT NULL DEFAULT 'auto',
+            is_leaf         INTEGER NOT NULL DEFAULT 1,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            description     TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            FOREIGN KEY (parent_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+            UNIQUE (code)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_accounts_parent
+            ON accounts(parent_id);
+
+        CREATE TABLE IF NOT EXISTS contacts (
+            id              TEXT PRIMARY KEY,
+            code            TEXT NOT NULL,
+            name            TEXT NOT NULL,
+            contact_type    TEXT NOT NULL,
+            tax_id          TEXT,
+            bank_account    TEXT,
+            bank_name       TEXT,
+            address         TEXT,
+            phone           TEXT,
+            email           TEXT,
+            remark          TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            UNIQUE (code)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_contacts_type
+            ON contacts(contact_type);
+
+        CREATE TABLE IF NOT EXISTS vouchers (
+            id              TEXT PRIMARY KEY,
+            voucher_no      TEXT NOT NULL,
+            voucher_date    TEXT NOT NULL,
+            voucher_type    TEXT NOT NULL,
+            summary         TEXT NOT NULL,
+            attachments     INTEGER NOT NULL DEFAULT 0,
+            status          TEXT NOT NULL DEFAULT 'draft',
+            debit_total     TEXT NOT NULL DEFAULT '0',
+            credit_total    TEXT NOT NULL DEFAULT '0',
+            operator_id     TEXT,
+            operator_name   TEXT,
+            auditor_id      TEXT,
+            auditor_name    TEXT,
+            audited_at      TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            UNIQUE (voucher_no)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_vouchers_date
+            ON vouchers(voucher_date);
+        CREATE INDEX IF NOT EXISTS idx_vouchers_status
+            ON vouchers(status);
+        CREATE INDEX IF NOT EXISTS idx_vouchers_type
+            ON vouchers(voucher_type);
+
+        CREATE TABLE IF NOT EXISTS voucher_entries (
+            id              TEXT PRIMARY KEY,
+            voucher_id      TEXT NOT NULL,
+            line_no         INTEGER NOT NULL,
+            account_id      TEXT NOT NULL,
+            account_code    TEXT NOT NULL,
+            account_name    TEXT NOT NULL,
+            summary         TEXT,
+            debit           TEXT NOT NULL DEFAULT '0',
+            credit          TEXT NOT NULL DEFAULT '0',
+            contact_id      TEXT,
+            contact_name    TEXT,
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE,
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+            UNIQUE (voucher_id, line_no)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_entries_voucher
+            ON voucher_entries(voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_entries_account
+            ON voucher_entries(account_id);
+
+        CREATE TABLE IF NOT EXISTS voucher_audit_logs (
+            id              TEXT PRIMARY KEY,
+            voucher_id      TEXT NOT NULL,
+            action          TEXT NOT NULL,
+            operator_id     TEXT,
+            operator_name   TEXT,
+            comment         TEXT,
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (voucher_id) REFERENCES vouchers(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_voucher
+            ON voucher_audit_logs(voucher_id);
+        ",
+    )
+    .map_err(|e| format!("公司库建表失败: {e}"))?;
+    Ok(())
+}

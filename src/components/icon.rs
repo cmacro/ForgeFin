@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use lucide_leptos::{
     Book, BookOpen, Building2, ChartNoAxesColumnIncreasing, Download, FilePlus, FileText, House,
-    ListChecks, Receipt, Scale, Search, Settings, SquareCheck, Target, Upload, Wallet,
+    ListChecks, Receipt, Scale, Search, Settings, SquareCheck, Target, Upload, Users, Wallet,
 };
 
 #[component]
@@ -21,6 +21,7 @@ pub fn Icon(name: &'static str, #[prop(default = 16)] size: usize) -> impl IntoV
         "download" => view! { <Download size=size /> }.into_any(),
         "upload" => view! { <Upload size=size /> }.into_any(),
         "building" => view! { <Building2 size=size /> }.into_any(),
+        "users" => view! { <Users size=size /> }.into_any(),
         "wallet" => view! { <Wallet size=size /> }.into_any(),
         "target" => view! { <Target size=size /> }.into_any(),
         "receipt" => view! { <Receipt size=size /> }.into_any(),
