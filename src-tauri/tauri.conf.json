@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.dev.forgefin",
   "build": {
-    "beforeDevCommand": "trunk serve --port 5175",
+    "beforeDevCommand": "trunk serve --port 5175 --address 0.0.0.0",
     "devUrl": "http://localhost:5175",
     "beforeBuildCommand": "trunk build",
     "frontendDist": "../dist"
