@@ -102,70 +102,72 @@ pub fn Settings() -> impl IntoView {
                 <div class="card-body dense">
                     <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
                         {move || Suspend::new(async move {
-                            match companies.await {
-                                Ok(list) => view! {
-                                    <table class="data-table" style="border:none">
-                                        <thead>
-                                            <tr>
-                                                <th>"名称"</th>
-                                                <th>"税号"</th>
-                                                <th>"法人"</th>
-                                                <th>"币种"</th>
-                                                <th>"状态"</th>
-                                                <th class="text-center border-l border-border">"操作"</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <For each=move || list.clone() key=|c| c.id.clone() let:c>
-                                                <tr>
-                                                    <td>
-                                                        <Show when=move || current_company.get() == Some(c.id.clone())>
-                                                            <span class="tag tag-brand">"当前"</span>
-                                                        </Show>
-                                                        {c.name.clone()}
-                                                    </td>
-                                                    <td>{c.tax_id.clone().unwrap_or("—".to_string())}</td>
-                                                    <td>{c.legal_person.clone().unwrap_or("—".to_string())}</td>
-                                                    <td>{c.currency.clone()}</td>
-                                                    <td>
-                                                        <span class=format!("tag {}", if c.is_active { "tag-success" } else { "tag-draft" })>
-                                                            {if c.is_active { "启用" } else { "停用" }}
-                                                        </span>
-                                                    </td>
-                                                    <td class="text-center border-l border-border">
-                                                        <div class="flex items-center justify-center gap-4">
-                                                            <button
-                                                                class="text-xs text-brand"
-                                                                on:click=move |_| on_switch(c.id.clone())
-                                                            >"切换"</button>
-                                                            <button
-                                                                class="text-xs text-secondary"
-                                                                on:click=move |_| on_edit(c.clone())
-                                                            >"编辑"</button>
-                                                            <button
-                                                                class="text-xs text-info"
-                                                                on:click=move |_| on_backup(c.id.clone())
-                                                            >"备份"</button>
-                                                            <button
-                                                                class="text-xs text-danger inline-flex"
-                                                                on:click=move |_| on_delete(c.clone())
-                                                            >
-                                                                <Trash2 size=12 />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </For>
-                                        </tbody>
-                                    </table>
-                                    <Show when=move || list.is_empty()>
-                                        <div class="empty-state">
-                                            <p class="empty-state-desc">"尚无账套,点击「新建账套」开始。"</p>
-                                        </div>
-                                    </Show>
-                                },
-                                Err(e) => view! { <div class="login-error">{format!("加载账套失败: {e}")}</div> },
-                            }
+                             match companies.await {
+                                 Ok(list) => view! {
+                                     <>
+                                         <table class="data-table" style="border:none">
+                                             <thead>
+                                                 <tr>
+                                                     <th>"名称"</th>
+                                                     <th>"税号"</th>
+                                                     <th>"法人"</th>
+                                                     <th>"币种"</th>
+                                                     <th>"状态"</th>
+                                                     <th class="text-center border-l border-border">"操作"</th>
+                                                 </tr>
+                                             </thead>
+                                             <tbody>
+                                                 <For each=move || list.clone() key=|c| c.id.clone() let:c>
+                                                     <tr>
+                                                         <td>
+                                                             <Show when=move || current_company.get() == Some(c.id.clone())>
+                                                                 <span class="tag tag-brand">"当前"</span>
+                                                             </Show>
+                                                             {c.name.clone()}
+                                                         </td>
+                                                         <td>{c.tax_id.clone().unwrap_or("—".to_string())}</td>
+                                                         <td>{c.legal_person.clone().unwrap_or("—".to_string())}</td>
+                                                         <td>{c.currency.clone()}</td>
+                                                         <td>
+                                                             <span class=format!("tag {}", if c.is_active { "tag-success" } else { "tag-draft" })>
+                                                                 {if c.is_active { "启用" } else { "停用" }}
+                                                             </span>
+                                                         </td>
+                                                         <td class="text-center border-l border-border">
+                                                             <div class="flex items-center justify-center gap-4">
+                                                                 <button
+                                                                     class="text-xs text-brand"
+                                                                     on:click=move |_| on_switch(c.id.clone())
+                                                             >"切换"</button>
+                                                             <button
+                                                                 class="text-xs text-secondary"
+                                                                 on:click=move |_| open_edit(c.clone())
+                                                             >"编辑"</button>
+                                                                 <button
+                                                                     class="text-xs text-info"
+                                                                     on:click=move |_| on_backup(c.id.clone())
+                                                                 >"备份"</button>
+                                                                 <button
+                                                                     class="text-xs text-danger inline-flex"
+                                                                     on:click=move |_| on_delete(c.clone())
+                                                                 >
+                                                                     <Trash2 size=12 />
+                                                                 </button>
+                                                             </div>
+                                                         </td>
+                                                     </tr>
+                                                 </For>
+                                             </tbody>
+                                         </table>
+                                         <Show when=move || list.is_empty()>
+                                             <div class="empty-state">
+                                                 <p class="empty-state-desc">"尚无账套,点击「新建账套」开始。"</p>
+                                             </div>
+                                         </Show>
+                                     </>
+                                 }.into_any(),
+                                 Err(e) => view! { <div class="login-error">{format!("加载账套失败: {e}")}</div> }.into_any(),
+                             }
                         })}
                     </Suspense>
                 </div>
@@ -204,14 +206,14 @@ pub fn Settings() -> impl IntoView {
                                             </For>
                                         </tbody>
                                     </table>
-                                    <Show when=move || list.is_empty()>
-                                        <div class="empty-state">
-                                            <p class="empty-state-desc">"尚无备份文件。点击「备份系统库」或某账套的「备份」生成备份。"</p>
-                                        </div>
-                                    </Show>
-                                },
-                                Err(e) => view! { <div class="login-error">{format!("加载备份失败: {e}")}</div> },
-                            }
+                                     <Show when=move || list.is_empty()>
+                                         <div class="empty-state">
+                                             <p class="empty-state-desc">"尚无备份文件。点击「备份系统库」或某账套的「备份」生成备份。"</p>
+                                         </div>
+                                     </Show>
+                                 }.into_any(),
+                                 Err(e) => view! { <div class="login-error">{format!("加载备份失败: {e}")}</div> }.into_any(),
+                             }
                         })}
                     </Suspense>
                 </div>
@@ -273,7 +275,7 @@ fn RestoreButton(backup: BackupEntry, on_restore_ok: impl Fn() + 'static) -> imp
             <RotateCcw size=12 />
             "恢复"
         </button>
-        <Modal open=open title="恢复账套" size="sm" on_close=close_rc>
+        <Modal open=open title="恢复账套" size=Some("sm") on_close=close_rc>
             <div class="modal-form">
                 <p class="empty-state-desc">
                     "此操作将用备份覆盖目标账套数据库,且不可撤销。请确认。"
@@ -377,7 +379,7 @@ fn CompanyEditModal(
     };
 
     view! {
-        <Modal open=open title="账套" size="lg" on_close=close_rc>
+        <Modal open=open title="账套" size=Some("lg") on_close=close_rc>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">
