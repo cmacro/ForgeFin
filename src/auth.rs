@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use leptos::prelude::*;
 
 use crate::ipc::{self, CompanyBrief, CurrentUser, UserInfo};
@@ -9,10 +11,11 @@ use crate::ipc::{self, CompanyBrief, CurrentUser, UserInfo};
 /// - `available_companies`: 当前用户可访问的公司列表。
 pub struct Session;
 
-static SESSION: RwSignal<Option<UserInfo>> = RwSignal::new(None);
-static COMPANY_ID: RwSignal<Option<String>> = RwSignal::new(None);
-static AVAILABLE: RwSignal<Vec<CompanyBrief>> = RwSignal::new(Vec::new());
-static LOADING: RwSignal<bool> = RwSignal::new(true);
+static SESSION: LazyLock<RwSignal<Option<UserInfo>>> = LazyLock::new(|| RwSignal::new(None));
+static COMPANY_ID: LazyLock<RwSignal<Option<String>>> = LazyLock::new(|| RwSignal::new(None));
+static AVAILABLE: LazyLock<RwSignal<Vec<CompanyBrief>>> =
+    LazyLock::new(|| RwSignal::new(Vec::new()));
+static LOADING: LazyLock<RwSignal<bool>> = LazyLock::new(|| RwSignal::new(true));
 
 impl Session {
     pub fn user() -> ReadSignal<Option<UserInfo>> {

@@ -101,9 +101,9 @@ pub fn Settings() -> impl IntoView {
                 </div>
                 <div class="card-body dense">
                     <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || Suspend::with(async move {
-                            match companies.get().await {
-                                Some(Ok(list)) => view! {
+                        {move || Suspend::new(async move {
+                            match companies.await {
+                                Ok(list) => view! {
                                     <table class="data-table" style="border:none">
                                         <thead>
                                             <tr>
@@ -164,8 +164,7 @@ pub fn Settings() -> impl IntoView {
                                         </div>
                                     </Show>
                                 },
-                                Some(Err(e)) => view! { <div class="login-error">{format!("加载账套失败: {e}")}</div> },
-                                None => view! { <div class="text-tertiary p-4">"加载中…"</div> },
+                                Err(e) => view! { <div class="login-error">{format!("加载账套失败: {e}")}</div> },
                             }
                         })}
                     </Suspense>
@@ -182,9 +181,9 @@ pub fn Settings() -> impl IntoView {
                 </div>
                 <div class="card-body dense">
                     <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || Suspend::with(async move {
-                            match backups.get().await {
-                                Some(Ok(list)) => view! {
+                        {move || Suspend::new(async move {
+                            match backups.await {
+                                Ok(list) => view! {
                                     <table class="data-table" style="border:none">
                                         <thead>
                                             <tr>
@@ -211,8 +210,7 @@ pub fn Settings() -> impl IntoView {
                                         </div>
                                     </Show>
                                 },
-                                Some(Err(e)) => view! { <div class="login-error">{format!("加载备份失败: {e}")}</div> },
-                                None => view! { <div class="text-tertiary p-4">"加载中…"</div> },
+                                Err(e) => view! { <div class="login-error">{format!("加载备份失败: {e}")}</div> },
                             }
                         })}
                     </Suspense>

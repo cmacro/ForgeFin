@@ -17,7 +17,11 @@ use crate::ipc::{self, Voucher, VoucherFilter, VoucherPage};
 pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl IntoView {
     let (page, set_page) = signal(1i32);
     let (filter, set_filter) = signal(VoucherFilter {
-        status: if audit_mode { Some("unaudited".to_string()) } else { None },
+        status: if audit_mode {
+            Some("unaudited".to_string())
+        } else {
+            None
+        },
         page_size: Some(20),
         ..Default::default()
     });
@@ -77,7 +81,11 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
         },
         TabItem {
             key: "voucher_management",
-            label: if audit_mode { "凭证审核" } else { "凭证管理" },
+            label: if audit_mode {
+                "凭证审核"
+            } else {
+                "凭证管理"
+            },
             closable: false,
         },
     ];
@@ -88,7 +96,11 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
     };
     let on_reset = move || {
         set_filter.set(VoucherFilter {
-            status: if audit_mode { Some("unaudited".to_string()) } else { None },
+            status: if audit_mode {
+                Some("unaudited".to_string())
+            } else {
+                None
+            },
             page_size: Some(20),
             ..Default::default()
         });
@@ -118,9 +130,9 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
             <div class="page-grid">
                 <div class="data-table flex flex-col min-h-0">
                     <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || Suspend::with(async move {
-                            match vouchers.get().await {
-                                Some(Ok(p)) => view! {
+                        {move || Suspend::new(async move {
+                            match vouchers.await {
+                                Ok(p) => view! {
                                     <DataTable
                                         rows=p.items.clone()
                                         selected_id=selected_id
@@ -134,10 +146,9 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
                                         />
                                     </div>
                                 },
-                                Some(Err(e)) => view! {
+                                Err(e) => view! {
                                     <div class="login-error">{format!("加载凭证失败: {e}")}</div>
                                 },
-                                None => view! { <div class="text-tertiary p-4">"加载中…"</div> },
                             }
                         })}
                     </Suspense>
@@ -157,19 +168,25 @@ fn search_fields() -> Vec<SearchField> {
         SearchField {
             key: "date_from",
             label: "开始日期",
-            kind: FieldKind::Text { placeholder: Some("2024-06-01") },
+            kind: FieldKind::Text {
+                placeholder: Some("2024-06-01"),
+            },
             width: None,
         },
         SearchField {
             key: "date_to",
             label: "结束日期",
-            kind: FieldKind::Text { placeholder: Some("2024-06-30") },
+            kind: FieldKind::Text {
+                placeholder: Some("2024-06-30"),
+            },
             width: None,
         },
         SearchField {
             key: "voucher_no",
             label: "凭证字号",
-            kind: FieldKind::Text { placeholder: Some("凭证字号") },
+            kind: FieldKind::Text {
+                placeholder: Some("凭证字号"),
+            },
             width: None,
         },
         SearchField {
@@ -177,10 +194,22 @@ fn search_fields() -> Vec<SearchField> {
             label: "凭证类型",
             kind: FieldKind::Select {
                 options: vec![
-                    SelectOption { value: "记账", label: "记账凭证" },
-                    SelectOption { value: "付款", label: "付款凭证" },
-                    SelectOption { value: "收款", label: "收款凭证" },
-                    SelectOption { value: "转账", label: "转账凭证" },
+                    SelectOption {
+                        value: "记账",
+                        label: "记账凭证",
+                    },
+                    SelectOption {
+                        value: "付款",
+                        label: "付款凭证",
+                    },
+                    SelectOption {
+                        value: "收款",
+                        label: "收款凭证",
+                    },
+                    SelectOption {
+                        value: "转账",
+                        label: "转账凭证",
+                    },
                 ],
                 placeholder: Some("全部"),
             },
@@ -191,10 +220,22 @@ fn search_fields() -> Vec<SearchField> {
             label: "审核状态",
             kind: FieldKind::Select {
                 options: vec![
-                    SelectOption { value: "draft", label: "草稿" },
-                    SelectOption { value: "unaudited", label: "未审核" },
-                    SelectOption { value: "audited", label: "已审核" },
-                    SelectOption { value: "posted", label: "已过账" },
+                    SelectOption {
+                        value: "draft",
+                        label: "草稿",
+                    },
+                    SelectOption {
+                        value: "unaudited",
+                        label: "未审核",
+                    },
+                    SelectOption {
+                        value: "audited",
+                        label: "已审核",
+                    },
+                    SelectOption {
+                        value: "posted",
+                        label: "已过账",
+                    },
                 ],
                 placeholder: Some("全部"),
             },
@@ -204,7 +245,9 @@ fn search_fields() -> Vec<SearchField> {
 }
 
 #[component]
-fn SummaryStats(vouchers: Resource<(VoucherFilter, i32), Result<VoucherPage, String>>) -> impl IntoView {
+fn SummaryStats(
+    vouchers: Resource<(VoucherFilter, i32), Result<VoucherPage, String>>,
+) -> impl IntoView {
     view! {
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard label="凭证总数" value="—".to_string() unit=None accent=KpiAccent::Brand />
@@ -214,8 +257,8 @@ fn SummaryStats(vouchers: Resource<(VoucherFilter, i32), Result<VoucherPage, Str
             <KpiCard label="贷方合计" value="—".to_string() unit=None accent=KpiAccent::Primary />
             <KpiCard label="借贷差额" value="—".to_string() unit=None accent=KpiAccent::Info />
         </div>
-        {move || Suspend::with(async move {
-            if let Some(Ok(p)) = vouchers.get().await {
+        {move || Suspend::new(async move {
+            if let Ok(p) = vouchers.await {
                 let audited = p.items.iter().filter(|v| v.status == "audited").count();
                 let unaudited = p.items.iter().filter(|v| v.status != "audited").count();
                 let debit: i64 = p.items.iter().map(|v| v.debit_total.parse::<i64>().unwrap_or(0)).sum();
@@ -386,121 +429,125 @@ fn VoucherDetail(
                 </button>
             </div>
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"请选择一条凭证查看详情"</div> }>
-                {move || Suspend::with(async move {
-                    match detail.get().await {
-                        Some(d) => view! {
-                            <div class="detail-grid">
-                                <DetailField label="凭证字号" value=d.voucher.voucher_no.clone() />
-                                <DetailField label="凭证日期" value=d.voucher.voucher_date.clone() />
-                                <DetailField label="凭证类型" value=d.voucher.voucher_type.clone() />
-                                <DetailField label="附件" value=d.voucher.attachments.to_string() />
-                                <DetailField label="摘要" value=d.voucher.summary.clone() />
-                                <DetailField label="审核状态" value=status_cn(&d.voucher.status) highlight=true />
-                            </div>
-                            <div class="flex-1 overflow-auto p-3">
-                                <table class="data-table" style="border:none">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-40 text-center">"序号"</th>
-                                            <th>"科目编码"</th>
-                                            <th>"科目名称"</th>
-                                            <th>"摘要"</th>
-                                            <th class="data-table-num">"借方(分)"</th>
-                                            <th class="data-table-num">"贷方(分)"</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <For each=move || d.entries.clone() key=|e| e.id.clone() let:entry>
+                {move || {
+                    detail.get()
+                        .flatten()
+                        .map(|d| {
+                            let vid = d.voucher.id.clone();
+                            let status = d.voucher.status.clone();
+                            let logs = d.audit_logs.clone();
+                            let entries = d.entries.clone();
+                            view! {
+                                <div class="detail-grid">
+                                    <DetailField label="凭证字号" value=d.voucher.voucher_no.clone() />
+                                    <DetailField label="凭证日期" value=d.voucher.voucher_date.clone() />
+                                    <DetailField label="凭证类型" value=d.voucher.voucher_type.clone() />
+                                    <DetailField label="附件" value=d.voucher.attachments.to_string() />
+                                    <DetailField label="摘要" value=d.voucher.summary.clone() />
+                                    <DetailField label="审核状态" value=status_cn(&d.voucher.status) highlight=true />
+                                </div>
+                                <div class="flex-1 overflow-auto p-3">
+                                    <table class="data-table" style="border:none">
+                                        <thead>
                                             <tr>
-                                                <td class="data-table-num">{entry.line_no}</td>
-                                                <td class="data-table-num">{entry.account_code.clone()}</td>
-                                                <td>{entry.account_name.clone()}</td>
-                                                <td>{entry.summary.clone().unwrap_or("—".to_string())}</td>
-                                                <td class="data-table-num">{entry.debit.clone()}</td>
-                                                <td class="data-table-num">{entry.credit.clone()}</td>
+                                                <th class="w-40 text-center">"序号"</th>
+                                                <th>"科目编码"</th>
+                                                <th>"科目名称"</th>
+                                                <th>"摘要"</th>
+                                                <th class="data-table-num">"借方(分)"</th>
+                                                <th class="data-table-num">"贷方(分)"</th>
                                             </tr>
-                                        </For>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="border-t border-border p-3">
-                                <div class="form-field">
-                                    <label class="form-label">"审核意见"</label>
-                                    <textarea
-                                        class="form-textarea"
-                                        rows="2"
-                                        prop:value=audit_comment
-                                        on:input=move |ev| set_audit_comment.set(event_target_value(&ev))
-                                    ></textarea>
+                                        </thead>
+                                        <tbody>
+                                            <For each=move || entries.clone() key=|e| e.id.clone() let:entry>
+                                                <tr>
+                                                    <td class="data-table-num">{entry.line_no}</td>
+                                                    <td class="data-table-num">{entry.account_code.clone()}</td>
+                                                    <td>{entry.account_name.clone()}</td>
+                                                    <td>{entry.summary.clone().unwrap_or("—".to_string())}</td>
+                                                    <td class="data-table-num">{entry.debit.clone()}</td>
+                                                    <td class="data-table-num">{entry.credit.clone()}</td>
+                                                </tr>
+                                            </For>
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div class="modal-form-actions mt-2">
-                                    <button
-                                        class="btn btn-outline"
-                                        on:click=move |_| on_delete(d.voucher.id.clone())
-                                    >
-                                        <Trash2 size=12 />
-                                        "删除"
-                                    </button>
-                                    <button
-                                        class="btn btn-primary"
-                                        on:click=move |_| {
-                                            let c = audit_comment.get();
-                                            on_audit(
-                                                d.voucher.id.clone(),
-                                                if c.is_empty() { None } else { Some(c) }
-                                            );
-                                        }
-                                    >
-                                        <Check size=12 />
-                                        {move || if d.voucher.status == "audited" { "反审核" } else { "审核" }}
-                                    </button>
-                                    <button class="btn btn-outline" on:click=move |_| {
-                                        if let Some(w) = web_sys::window() {
-                                            let _ = w.print();
-                                        }
-                                    }>
-                                        <Printer size=12 />
-                                        "打印"
-                                    </button>
-                                </div>
-                            </div>
-                            <Show when=move || !d.audit_logs.is_empty()>
                                 <div class="border-t border-border p-3">
-                                    <div class="text-13 text-secondary mb-2">"审核日志"</div>
-                                    {d.audit_logs.iter().map(|log| {
-                                        let title = match log.action.as_str() {
-                                            "audit" => "审核通过",
-                                            "unaudit" => "反审核",
-                                            _ => "操作",
-                                        };
-                                        view! {
-                                            <div class="log-entry">
-                                                <span class="log-entry-dot" style="background: var(--color-brand)"></span>
-                                                <div class="log-entry-title">{title}</div>
-                                                <div class="log-entry-meta">
-                                                    <span class="text-primary font-medium">
-                                                        {log.operator_name.clone().unwrap_or("—".to_string())}
-                                                    </span>
-                                                    <span class="text-tertiary">{log.created_at.clone()}</span>
-                                                </div>
-                                                <Show when=move || log.comment.is_some()>
-                                                    <div class="log-entry-comment">
-                                                        {log.comment.clone().unwrap_or_default()}
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                        }
-                                    }).collect::<Vec<_>>()}
+                                    <div class="form-field">
+                                        <label class="form-label">"审核意见"</label>
+                                        <textarea
+                                            class="form-textarea"
+                                            rows="2"
+                                            prop:value=audit_comment
+                                            on:input=move |ev| set_audit_comment.set(event_target_value(&ev))
+                                        ></textarea>
+                                    </div>
+                                    <div class="modal-form-actions mt-2">
+                                        <button
+                                            class="btn btn-outline"
+                                            on:click=move |_| do_delete(vid.clone())
+                                        >
+                                            <Trash2 size=12 />
+                                            "删除"
+                                        </button>
+                                        <button
+                                            class="btn btn-primary"
+                                            on:click=move |_| {
+                                                let c = audit_comment.get();
+                                                do_audit(vid.clone(), if c.is_empty() { None } else { Some(c) })
+                                            }
+                                        >
+                                            <Check size=12 />
+                                            {move || if status == "audited" { "反审核" } else { "审核" }}
+                                        </button>
+                                        <button class="btn btn-outline" on:click=move |_| {
+                                            let _ = window().print();
+                                        }>
+                                            <Printer size=12 />
+                                            "打印"
+                                        </button>
+                                    </div>
                                 </div>
-                            </Show>
-                        },
-                        None => view! {
-                            <div class="empty-state">
-                                <p class="empty-state-desc">"请从左侧选择一条凭证查看详情。"</p>
-                            </div>
-                        },
-                    }
-                })}
+                                <Show when=move || !logs.is_empty()>
+                                    <div class="border-t border-border p-3">
+                                        <div class="text-13 text-secondary mb-2">"审核日志"</div>
+                                        {logs.iter().map(|log| {
+                                            let title = match log.action.as_str() {
+                                                "audit" => "审核通过",
+                                                "unaudit" => "反审核",
+                                                _ => "操作",
+                                            };
+                                            view! {
+                                                <div class="log-entry">
+                                                    <span class="log-entry-dot" style="background: var(--color-brand)"></span>
+                                                    <div class="log-entry-title">{title}</div>
+                                                    <div class="log-entry-meta">
+                                                        <span class="text-primary font-medium">
+                                                            {log.operator_name.clone().unwrap_or("—".to_string())}
+                                                        </span>
+                                                        <span class="text-tertiary">{log.created_at.clone()}</span>
+                                                    </div>
+                                                    <Show when=move || log.comment.is_some()>
+                                                        <div class="log-entry-comment">
+                                                            {log.comment.clone().unwrap_or_default()}
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </Show>
+                            }
+                        })
+                        .unwrap_or_else(|| {
+                            view! {
+                                <div class="empty-state">
+                                    <p class="empty-state-desc">"请从左侧选择一条凭证查看详情。"</p>
+                                </div>
+                            }
+                        })
+                        }
+                }
             </Suspense>
         </div>
     }
@@ -517,7 +564,11 @@ fn status_cn(s: &str) -> String {
 }
 
 #[component]
-fn DetailField(label: &'static str, value: String, #[prop(default = false)] highlight: bool) -> impl IntoView {
+fn DetailField(
+    label: &'static str,
+    value: String,
+    #[prop(default = false)] highlight: bool,
+) -> impl IntoView {
     view! {
         <div class="detail-field">
             <span class="detail-field-label">{label}</span>

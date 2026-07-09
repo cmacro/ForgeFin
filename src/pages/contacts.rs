@@ -41,10 +41,7 @@ pub fn Contacts() -> impl IntoView {
     };
 
     let filtered = move || {
-        let list = contacts
-            .get()
-            .and_then(|r| r.ok())
-            .unwrap_or_default();
+        let list = contacts.get().and_then(|r| r.ok()).unwrap_or_default();
         list.into_iter()
             .filter(|c| filter_type.get().is_none() || c.contact_type == filter_type.get().unwrap())
             .filter(|c| {
@@ -99,8 +96,8 @@ pub fn Contacts() -> impl IntoView {
                 <div class="login-error">{move || error.get().unwrap_or_default()}</div>
             </Show>
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                {move || Suspend::with(async move {
-                    let _ = contacts.get().await;
+                {move || Suspend::new(async move {
+                    let _ = contacts.await;
                     let rows = filtered();
                     view! {
                         <div class="data-table flex flex-col min-h-0">

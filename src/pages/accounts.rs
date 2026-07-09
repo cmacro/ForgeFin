@@ -50,9 +50,9 @@ pub fn Accounts() -> impl IntoView {
                 <div class="login-error">{move || error.get().unwrap_or_default()}</div>
             </Show>
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                {move || Suspend::with(async move {
-                    match accounts.get().await {
-                        Some(Ok(list)) => {
+                {move || Suspend::new(async move {
+                    match accounts.await {
+                        Ok(list) => {
                             let tree = build_tree(&list);
                             view! {
                                 <div class="card">
@@ -89,10 +89,9 @@ pub fn Accounts() -> impl IntoView {
                                 </div>
                             }
                         }
-                        Some(Err(e)) => view! {
+                        Err(e) => view! {
                             <div class="login-error">{format!("加载科目失败: {e}")}</div>
                         },
-                        None => view! { <div class="text-tertiary p-4">"加载中…"</div> },
                     }
                 })}
             </Suspense>
@@ -117,7 +116,10 @@ fn build_tree(accounts: &[Account]) -> Vec<AccountNode> {
     let mut by_parent: std::collections::HashMap<Option<String>, Vec<Account>> =
         std::collections::HashMap::new();
     for a in accounts {
-        by_parent.entry(a.parent_id.clone()).or_default().push(a.clone());
+        by_parent
+            .entry(a.parent_id.clone())
+            .or_default()
+            .push(a.clone());
     }
     fn build(
         parent: Option<&str>,

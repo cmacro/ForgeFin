@@ -176,7 +176,7 @@ pub struct VoucherInput {
     pub entries: Vec<VoucherEntryInput>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct VoucherFilter {
     pub date_from: Option<String>,
     pub date_to: Option<String>,
@@ -232,7 +232,10 @@ use js_sys::Reflect;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 
-fn tauri_invoke(cmd: String, args: JsValue) -> impl std::future::Future<Output = Result<JsValue, String>> {
+fn tauri_invoke(
+    cmd: String,
+    args: JsValue,
+) -> impl std::future::Future<Output = Result<JsValue, String>> {
     async move {
         let global = js_sys::global();
         let tauri = Reflect::get(&global, &JsValue::from_str("__TAURI__"))
@@ -252,15 +255,21 @@ fn tauri_invoke(cmd: String, args: JsValue) -> impl std::future::Future<Output =
     }
 }
 
-pub async fn invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: &impl Serialize) -> Result<T, String> {
+pub async fn invoke<T: serde::de::DeserializeOwned>(
+    cmd: &str,
+    args: &impl Serialize,
+) -> Result<T, String> {
     let args_val = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
     let res = tauri_invoke(cmd.to_string(), args_val).await?;
     serde_wasm_bindgen::from_value(res).map_err(|e| e.to_string())
 }
 
 pub async fn login(username: String, password: String) -> Result<AuthResult, String> {
-    invoke("login_cmd", &[("username", &username), ("password", &password)])
-        .await
+    invoke(
+        "login_cmd",
+        &[("username", &username), ("password", &password)],
+    )
+    .await
 }
 
 pub async fn logout() -> Result<(), String> {
@@ -346,7 +355,10 @@ pub async fn audit_voucher(id: String, comment: Option<String>) -> Result<Vouche
 pub async fn next_voucher_no(voucher_type: String, voucher_date: String) -> Result<String, String> {
     invoke(
         "next_voucher_no_cmd",
-        &[("voucher_type", &voucher_type), ("voucher_date", &voucher_date)],
+        &[
+            ("voucher_type", &voucher_type),
+            ("voucher_date", &voucher_date),
+        ],
     )
     .await
 }
@@ -363,7 +375,11 @@ pub async fn list_backups() -> Result<Vec<BackupEntry>, String> {
     invoke("list_backups_cmd", &()).await
 }
 
-pub async fn restore_company(company_id: String, backup_path: String, confirm: bool) -> Result<(), String> {
+pub async fn restore_company(
+    company_id: String,
+    backup_path: String,
+    confirm: bool,
+) -> Result<(), String> {
     invoke(
         "restore_company_cmd",
         &[
