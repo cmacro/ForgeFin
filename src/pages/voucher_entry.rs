@@ -118,6 +118,8 @@ pub fn VoucherEntry() -> impl IntoView {
         });
     };
 
+    let entries_iter = move || entries.get().into_iter().enumerate().collect::<Vec<_>>();
+
     view! {
         <div class="page-content">
             <div class="card">
@@ -202,7 +204,7 @@ pub fn VoucherEntry() -> impl IntoView {
                             </tr>
                         </thead>
                         <tbody>
-                            <For each=move || entries.get().into_iter().enumerate().collect::<Vec<_>>()
+                            <For each=entries_iter
                                 key=|(_, e)| e.uid let:(idx, e)>
                                 <tr>
                                     <td class="data-table-num">{idx + 1}</td>
