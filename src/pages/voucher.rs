@@ -25,26 +25,27 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
         page_size: Some(20),
         ..Default::default()
     });
-    let vouchers = Resource::new(
-        move || (filter.get(), page.get()),
-        move |(filter, page)| async move {
+    let vouchers = LocalResource::new(move || {
+        let filter = filter.get();
+        let page = page.get();
+        async move {
             let mut f = filter;
             f.page = Some(page);
             ipc::list_vouchers(&f).await
-        },
-    );
+        }
+    });
 
     let (selected_id, set_selected_id) = signal(Option::<String>::None);
-    let detail = Resource::new(
-        move || selected_id.get(),
-        move |id| async move {
+    let detail = LocalResource::new(move || {
+        let id = selected_id.get();
+        async move {
             if let Some(id) = id {
                 ipc::get_voucher(id).await.ok()
             } else {
-                None
+                None::<crate::ipc::VoucherDetail>
             }
-        },
-    );
+        }
+    });
 
     let (error, set_error) = signal(Option::<String>::None);
 
@@ -53,7 +54,8 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
             match ipc::audit_voucher(id, comment).await {
                 Ok(_) => {
                     vouchers.refetch();
-                    detail.refetch();
+                    let cur = selected_id.get();
+                    set_selected_id.set(cur);
                 }
                 Err(e) => set_error.set(Some(e)),
             }
@@ -65,7 +67,6 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
             match ipc::delete_voucher(id).await {
                 Ok(_) => {
                     vouchers.refetch();
-                    detail.refetch();
                     set_selected_id.set(None);
                 }
                 Err(e) => set_error.set(Some(e)),
@@ -133,6 +134,7 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
                         {move || Suspend::new(async move {
                             match vouchers.await {
                                 Ok(p) => view! {
+                                    <>
                                     <DataTable
                                         rows=p.items.clone()
                                         selected_id=selected_id
@@ -145,18 +147,19 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
                                             page_size=p.page_size
                                         />
                                     </div>
-                                },
+                                    </>
+                                }.into_any(),
                                 Err(e) => view! {
                                     <div class="login-error">{format!("加载凭证失败: {e}")}</div>
-                                },
+                                }.into_any(),
                             }
                         })}
                     </Suspense>
                 </div>
                 <VoucherDetail
                     detail=detail
-                    on_audit=do_audit
-                    on_delete=do_delete
+                    on_audit=std::sync::Arc::new(do_audit)
+                    on_delete=std::sync::Arc::new(do_delete)
                 />
             </div>
         </div>
@@ -245,9 +248,7 @@ fn search_fields() -> Vec<SearchField> {
 }
 
 #[component]
-fn SummaryStats(
-    vouchers: Resource<(VoucherFilter, i32), Result<VoucherPage, String>>,
-) -> impl IntoView {
+fn SummaryStats(vouchers: LocalResource<Result<VoucherPage, String>>) -> impl IntoView {
     view! {
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard label="凭证总数" value="—".to_string() unit=None accent=KpiAccent::Brand />
@@ -258,24 +259,24 @@ fn SummaryStats(
             <KpiCard label="借贷差额" value="—".to_string() unit=None accent=KpiAccent::Info />
         </div>
         {move || Suspend::new(async move {
-            if let Ok(p) = vouchers.await {
-                let audited = p.items.iter().filter(|v| v.status == "audited").count();
-                let unaudited = p.items.iter().filter(|v| v.status != "audited").count();
-                let debit: i64 = p.items.iter().map(|v| v.debit_total.parse::<i64>().unwrap_or(0)).sum();
-                let credit: i64 = p.items.iter().map(|v| v.credit_total.parse::<i64>().unwrap_or(0)).sum();
-                view! {
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-3 text-xs text-tertiary">
-                        <span>{format!("本页 {} 条", p.items.len())}</span>
-                        <span>{format!("已审核 {}", audited)}</span>
-                        <span>{format!("未审核 {}", unaudited)}</span>
-                        <span>{format!("借方 {} 分", debit)}</span>
-                        <span>{format!("贷方 {} 分", credit)}</span>
-                        <span>{format!("差额 {} 分", debit - credit)}</span>
-                    </div>
+                if let Ok(p) = vouchers.await {
+                    let audited = p.items.iter().filter(|v| v.status == "audited").count();
+                    let unaudited = p.items.iter().filter(|v| v.status != "audited").count();
+                    let debit: i64 = p.items.iter().map(|v| v.debit_total.parse::<i64>().unwrap_or(0)).sum();
+                    let credit: i64 = p.items.iter().map(|v| v.credit_total.parse::<i64>().unwrap_or(0)).sum();
+                    view! {
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-3 text-xs text-tertiary">
+                            <span>{format!("本页 {} 条", p.items.len())}</span>
+                            <span>{format!("已审核 {}", audited)}</span>
+                            <span>{format!("未审核 {}", unaudited)}</span>
+                            <span>{format!("借方 {} 分", debit)}</span>
+                            <span>{format!("贷方 {} 分", credit)}</span>
+                            <span>{format!("差额 {} 分", debit - credit)}</span>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! { <span></span> }.into_any()
                 }
-            } else {
-                view! { <span></span> }
-            }
         })}
     }
 }
@@ -338,10 +339,10 @@ fn DataTable(
                     </tr>
                 </thead>
                 <tbody>
-                    <For each=move || rows.clone() key=|r| r.id.clone() let:(idx, row)>
+                    <For each=move || rows.clone() key=|r| r.id.clone() let:row>
                         <RowItem
                             row=row
-                            idx=idx + 1
+                            idx=0
                             selected=selected_id
                             set_selected=set_selected_id
                         />
@@ -377,12 +378,14 @@ fn RowItem(
     }
     .to_string();
     let variant = status_variant(&status_label);
-    let is_active = move || selected.get() == Some(row.id.clone());
     let id = row.id.clone();
+    let id2 = id.clone();
+    let is_active = move || selected.get() == Some(id.clone());
+    let row_id = id2.clone();
     view! {
         <tr
             class=("selected", is_active)
-            on:click=move |_| set_selected.set(Some(row.id.clone()))
+            on:click=move |_| set_selected.set(Some(row_id.clone()))
         >
             <td class="text-center" on:click=move |ev| ev.stop_propagation()>
                 <input type="checkbox" style="width:14px;height:14px" />
@@ -401,7 +404,7 @@ fn RowItem(
             </td>
             <td class="text-center border-l border-border" on:click=move |ev| ev.stop_propagation()>
                 <div class="flex items-center justify-center gap-4">
-                    <button class="text-xs text-brand" on:click=move |_| set_selected.set(Some(id.clone()))>"查看"</button>
+                    <button class="text-xs text-brand" on:click=move |_| set_selected.set(Some(id2.clone()))>"查看"</button>
                     <button class="text-xs inline-flex items-center gap-0.5 text-secondary">
                         "更多"
                         <ChevronDown size=10 />
@@ -414,9 +417,9 @@ fn RowItem(
 
 #[component]
 fn VoucherDetail(
-    detail: Resource<Option<String>, Option<crate::ipc::VoucherDetail>>,
-    on_audit: impl Fn(String, Option<String>) + 'static,
-    on_delete: impl Fn(String) + 'static,
+    detail: LocalResource<Option<crate::ipc::VoucherDetail>>,
+    on_audit: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync>,
+    on_delete: std::sync::Arc<dyn Fn(String) + Send + Sync>,
 ) -> impl IntoView {
     let (audit_comment, set_audit_comment) = signal(String::new());
     view! {
@@ -429,125 +432,138 @@ fn VoucherDetail(
                 </button>
             </div>
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"请选择一条凭证查看详情"</div> }>
-                {move || {
-                    detail.get()
-                        .flatten()
-                        .map(|d| {
-                            let vid = d.voucher.id.clone();
-                            let status = d.voucher.status.clone();
-                            let logs = d.audit_logs.clone();
-                            let entries = d.entries.clone();
+                {let detail = detail.clone();
+                 let on_audit = on_audit.clone();
+                 let on_delete = on_delete.clone();
+                 move || {
+                    let detail = detail.clone();
+                    let on_audit = on_audit.clone();
+                    let on_delete = on_delete.clone();
+                    match detail.map(|d| d.clone()) {
+                        Some(Some(d)) => {
+                            let voucher = d.voucher;
+                            let vid = voucher.id.clone();
+                            let vid2 = vid.clone();
+                            let status = voucher.status.clone();
+                            let logs = d.audit_logs;
+                            let entries = d.entries;
+                            let on_audit = on_audit.clone();
+                            let on_delete = on_delete.clone();
+                            let logs_clone = logs.clone();
                             view! {
-                                <div class="detail-grid">
-                                    <DetailField label="凭证字号" value=d.voucher.voucher_no.clone() />
-                                    <DetailField label="凭证日期" value=d.voucher.voucher_date.clone() />
-                                    <DetailField label="凭证类型" value=d.voucher.voucher_type.clone() />
-                                    <DetailField label="附件" value=d.voucher.attachments.to_string() />
-                                    <DetailField label="摘要" value=d.voucher.summary.clone() />
-                                    <DetailField label="审核状态" value=status_cn(&d.voucher.status) highlight=true />
-                                </div>
-                                <div class="flex-1 overflow-auto p-3">
-                                    <table class="data-table" style="border:none">
-                                        <thead>
+                            <>
+                            <div class="detail-grid">
+                                <DetailField label="凭证字号" value=voucher.voucher_no />
+                                <DetailField label="凭证日期" value=voucher.voucher_date />
+                                <DetailField label="凭证类型" value=voucher.voucher_type />
+                                <DetailField label="附件" value=voucher.attachments.to_string() />
+                                <DetailField label="摘要" value=voucher.summary />
+                                <DetailField label="审核状态" value=status_cn(&voucher.status) highlight=true />
+                            </div>
+                            <div class="flex-1 overflow-auto p-3">
+                                <table class="data-table" style="border:none">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-40 text-center">"序号"</th>
+                                            <th>"科目编码"</th>
+                                            <th>"科目名称"</th>
+                                            <th>"摘要"</th>
+                                            <th class="data-table-num">"借方(分)"</th>
+                                            <th class="data-table-num">"贷方(分)"</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <For each=move || entries.clone() key=|e| e.id.clone() let:entry>
                                             <tr>
-                                                <th class="w-40 text-center">"序号"</th>
-                                                <th>"科目编码"</th>
-                                                <th>"科目名称"</th>
-                                                <th>"摘要"</th>
-                                                <th class="data-table-num">"借方(分)"</th>
-                                                <th class="data-table-num">"贷方(分)"</th>
+                                                <td class="data-table-num">{entry.line_no}</td>
+                                                <td class="data-table-num">{entry.account_code.clone()}</td>
+                                                <td>{entry.account_name.clone()}</td>
+                                                <td>{entry.summary.clone().unwrap_or("—".to_string())}</td>
+                                                <td class="data-table-num">{entry.debit.clone()}</td>
+                                                <td class="data-table-num">{entry.credit.clone()}</td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            <For each=move || entries.clone() key=|e| e.id.clone() let:entry>
-                                                <tr>
-                                                    <td class="data-table-num">{entry.line_no}</td>
-                                                    <td class="data-table-num">{entry.account_code.clone()}</td>
-                                                    <td>{entry.account_name.clone()}</td>
-                                                    <td>{entry.summary.clone().unwrap_or("—".to_string())}</td>
-                                                    <td class="data-table-num">{entry.debit.clone()}</td>
-                                                    <td class="data-table-num">{entry.credit.clone()}</td>
-                                                </tr>
-                                            </For>
-                                        </tbody>
-                                    </table>
+                                        </For>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="border-t border-border p-3">
+                                <div class="form-field">
+                                    <label class="form-label">"审核意见"</label>
+                                    <textarea
+                                        class="form-textarea"
+                                        rows="2"
+                                        prop:value=audit_comment
+                                        on:input=move |ev| set_audit_comment.set(event_target_value(&ev))
+                                    ></textarea>
                                 </div>
+                                <div class="modal-form-actions mt-2">
+                                    <button
+                                        class="btn btn-outline"
+                                        on:click=move |_| on_delete(vid.clone())
+                                    >
+                                        <Trash2 size=12 />
+                                        "删除"
+                                    </button>
+                                    <button
+                                        class="btn btn-primary"
+                                        on:click=move |_| {
+                                            let c = audit_comment.get();
+                                            on_audit(vid2.clone(), if c.is_empty() { None } else { Some(c) })
+                                        }
+                                    >
+                                        <Check size=12 />
+                                        {move || if status == "audited" { "反审核" } else { "审核" }}
+                                    </button>
+                                    <button class="btn btn-outline" on:click=move |_| {
+                                        let _ = window().print();
+                                    }>
+                                        <Printer size=12 />
+                                        "打印"
+                                    </button>
+                                </div>
+                            </div>
+                            <Show when=move || !logs_clone.is_empty()>
                                 <div class="border-t border-border p-3">
-                                    <div class="form-field">
-                                        <label class="form-label">"审核意见"</label>
-                                        <textarea
-                                            class="form-textarea"
-                                            rows="2"
-                                            prop:value=audit_comment
-                                            on:input=move |ev| set_audit_comment.set(event_target_value(&ev))
-                                        ></textarea>
-                                    </div>
-                                    <div class="modal-form-actions mt-2">
-                                        <button
-                                            class="btn btn-outline"
-                                            on:click=move |_| do_delete(vid.clone())
-                                        >
-                                            <Trash2 size=12 />
-                                            "删除"
-                                        </button>
-                                        <button
-                                            class="btn btn-primary"
-                                            on:click=move |_| {
-                                                let c = audit_comment.get();
-                                                do_audit(vid.clone(), if c.is_empty() { None } else { Some(c) })
-                                            }
-                                        >
-                                            <Check size=12 />
-                                            {move || if status == "audited" { "反审核" } else { "审核" }}
-                                        </button>
-                                        <button class="btn btn-outline" on:click=move |_| {
-                                            let _ = window().print();
-                                        }>
-                                            <Printer size=12 />
-                                            "打印"
-                                        </button>
-                                    </div>
+                                    <div class="text-13 text-secondary mb-2">"审核日志"</div>
+                                    {logs.iter().map(|log| {
+                                         let log = log.clone();
+                                         let title = match log.action.as_str() {
+                                             "audit" => "审核通过",
+                                             "unaudit" => "反审核",
+                                             _ => "操作",
+                                         };
+                                         let has_comment = log.comment.is_some();
+                                         let comment = log.comment.clone().unwrap_or_default();
+                                         view! {
+                                             <div class="log-entry">
+                                                 <span class="log-entry-dot" style="background: var(--color-brand)"></span>
+                                                 <div class="log-entry-title">{title}</div>
+                                                 <div class="log-entry-meta">
+                                                     <span class="text-primary font-medium">
+                                                         {log.operator_name.clone().unwrap_or("—".to_string())}
+                                                     </span>
+                                                     <span class="text-tertiary">{log.created_at.clone()}</span>
+                                                 </div>
+                                                 <Show when=move || has_comment>
+                                                     <div class="log-entry-comment">
+                                                         {comment.clone()}
+                                                     </div>
+                                                 </Show>
+                                             </div>
+                                         }
+                                     }).collect::<Vec<_>>()}
                                 </div>
-                                <Show when=move || !logs.is_empty()>
-                                    <div class="border-t border-border p-3">
-                                        <div class="text-13 text-secondary mb-2">"审核日志"</div>
-                                        {logs.iter().map(|log| {
-                                            let title = match log.action.as_str() {
-                                                "audit" => "审核通过",
-                                                "unaudit" => "反审核",
-                                                _ => "操作",
-                                            };
-                                            view! {
-                                                <div class="log-entry">
-                                                    <span class="log-entry-dot" style="background: var(--color-brand)"></span>
-                                                    <div class="log-entry-title">{title}</div>
-                                                    <div class="log-entry-meta">
-                                                        <span class="text-primary font-medium">
-                                                            {log.operator_name.clone().unwrap_or("—".to_string())}
-                                                        </span>
-                                                        <span class="text-tertiary">{log.created_at.clone()}</span>
-                                                    </div>
-                                                    <Show when=move || log.comment.is_some()>
-                                                        <div class="log-entry-comment">
-                                                            {log.comment.clone().unwrap_or_default()}
-                                                        </div>
-                                                    </Show>
-                                                </div>
-                                            }
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                </Show>
-                            }
-                        })
-                        .unwrap_or_else(|| {
-                            view! {
-                                <div class="empty-state">
-                                    <p class="empty-state-desc">"请从左侧选择一条凭证查看详情。"</p>
-                                </div>
-                            }
-                        })
+                            </Show>
+                            </>
+                            }.into_any()
                         }
-                }
+                        _ => view! {
+                            <div class="empty-state">
+                                <p class="empty-state-desc">"请从左侧选择一条凭证查看详情。"</p>
+                            </div>
+                        }.into_any(),
+                    }
+                }}
             </Suspense>
         </div>
     }

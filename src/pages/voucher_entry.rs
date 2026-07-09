@@ -9,7 +9,7 @@ use crate::ipc::{self, Account, VoucherEntryInput, VoucherInput};
 /// 实时校验借贷平衡,保存调用后端命令。
 #[component]
 pub fn VoucherEntry() -> impl IntoView {
-    let accounts = Resource::new(|| (), move |_| async { ipc::list_accounts().await });
+    let accounts = LocalResource::new(move || async { ipc::list_accounts().await });
     let (voucher_date, set_voucher_date) = signal(today_iso());
     let (voucher_type, set_voucher_type) = signal("记账".to_string());
     let (voucher_no, set_voucher_no) = signal(String::new());
@@ -19,7 +19,7 @@ pub fn VoucherEntry() -> impl IntoView {
     let (error, set_error) = signal(Option::<String>::None);
     let (saving, set_saving) = signal(false);
     let (success, set_success) = signal(Option::<String>::None);
-    let (no_loading, set_no_loading) = signal(false);
+    let (no_loading, _set_no_loading) = signal(false);
     let enumerated_entries = Memo::new(move |_| {
         entries
             .get()
@@ -132,219 +132,230 @@ pub fn VoucherEntry() -> impl IntoView {
     };
 
     view! {
-            <div class="page-content">
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">"新增凭证"</span>
-                        <button class="btn btn-outline btn-sm" on:click=move |_| gen_no()>
-                            "重新生成字号"
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div class="form-field">
-                                <label class="form-label">"凭证日期"</label>
-                                <input
-                                    class="form-input"
-                                    type="date"
-                                    prop:value=voucher_date
-                                    on:input=move |ev| set_voucher_date.set(event_target_value(&ev))
-                                />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">"凭证类型"</label>
-                                <select
-                                    class="form-select"
-                                    on:change=move |ev| set_voucher_type.set(event_target_value(&ev))
-                                >
-                                    <option value="记账" selected=move || voucher_type.get() == "记账">"记账凭证"</option>
-                                    <option value="付款" selected=move || voucher_type.get() == "付款">"付款凭证"</option>
-                                    <option value="收款" selected=move || voucher_type.get() == "收款">"收款凭证"</option>
-                                    <option value="转账" selected=move || voucher_type.get() == "转账">"转账凭证"</option>
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">"凭证字号"</label>
-                                <input
-                                    class="form-input"
-                                    prop:value=voucher_no
-                                    on:input=move |ev| set_voucher_no.set(event_target_value(&ev))
-                                />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">"附件张数"</label>
-                                <input
-                                    class="form-input"
-                                    type="number"
-                                    min="0"
-                                    prop:value=move || attachments.get().to_string()
-                                    on:input=move |ev| set_attachments.set(event_target_value(&ev).parse().unwrap_or(0))
-                                />
-                            </div>
-                        </div>
-                        <div class="form-field mt-3">
-                            <label class="form-label">"摘要"</label>
+        <div class="page-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">"新增凭证"</span>
+                    <button class="btn btn-outline btn-sm" on:click=move |_| gen_no()>
+                        "重新生成字号"
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="form-field">
+                            <label class="form-label">"凭证日期"</label>
                             <input
                                 class="form-input"
-                                placeholder="本凭证摘要"
-                                prop:value=summary
-                                on:input=move |ev| set_summary.set(event_target_value(&ev))
+                                type="date"
+                                prop:value=voucher_date
+                                on:input=move |ev| set_voucher_date.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">"凭证类型"</label>
+                            <select
+                                class="form-select"
+                                on:change=move |ev| set_voucher_type.set(event_target_value(&ev))
+                            >
+                                <option value="记账" selected=move || voucher_type.get() == "记账">"记账凭证"</option>
+                                <option value="付款" selected=move || voucher_type.get() == "付款">"付款凭证"</option>
+                                <option value="收款" selected=move || voucher_type.get() == "收款">"收款凭证"</option>
+                                <option value="转账" selected=move || voucher_type.get() == "转账">"转账凭证"</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">"凭证字号"</label>
+                            <input
+                                class="form-input"
+                                prop:value=voucher_no
+                                on:input=move |ev| set_voucher_no.set(event_target_value(&ev))
+                            />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">"附件张数"</label>
+                            <input
+                                class="form-input"
+                                type="number"
+                                min="0"
+                                prop:value=move || attachments.get().to_string()
+                                on:input=move |ev| set_attachments.set(event_target_value(&ev).parse().unwrap_or(0))
                             />
                         </div>
                     </div>
-                </div>
-
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <span class="card-title">"分录"</span>
-                        <button class="btn btn-outline btn-sm" on:click=move |_| add_row()>
-                            <Plus size=14 />
-                            "添加行"
-                        </button>
-                    </div>
-                    <div class="card-body dense">
-                        <table class="data-table" style="border:none">
-                            <thead>
-                                <tr>
-                                    <th class="text-center" style="width:48px">"序号"</th>
-                                    <th>"科目"</th>
-                                    <th>"摘要"</th>
-                                    <th class="data-table-num" style="width:160px">"借方(分)"</th>
-                                    <th class="data-table-num" style="width:160px">"贷方(分)"</th>
-                                    <th class="text-center" style="width:60px">"操作"</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <For each=move || enumerated_entries.get() key=|item| item.1.uid.clone() let:item>
-                                    <tr>
-                                        <td class="data-table-num">{item.0 + 1}</td>
-                                        <td>
-                                            <Suspense fallback=|| view! { <input class="form-input" disabled /> }>
-                                                {move || Suspend::new(async move {
-                                                    let list = accounts.await.unwrap_or_default();
-                                                    let leaves: Vec<&Account> = list.iter().filter(|a| a.is_leaf).collect();
-                                                    view! {
-                                                        <select
-                                                            class="form-select"
-                                                            on:change=move |ev| {
-                                                                let id = event_target_value(&ev);
-                                                                let acc = list.iter().find(|a| a.id == id).cloned();
-    set_entries.update(|v| {
-                                                                            if let Some(a) = acc {
-                                                                                v[item.0].account_id = a.id;
-                                                                                v[item.0].account_code = a.code;
-                                                                                v[item.0].account_name = a.name;
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                >
-                                                                    <option value="">"(选择科目)"</option>
-                                                                    {leaves.iter().map(|a| {
-                                                                        let id = a.id.clone();
-                                                                        let label = format!("{} · {}", a.code, a.name);
-                                                                        view! {
-                                                                            <option value=id selected=move || item.1.account_id == id>{label}</option>
-                                                                        }
-                                                                    }).collect::<Vec<_>>()}
-                                                                </select>
-                                                            }
-                                                        })}
-                                                    </Suspense>
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        class="form-input"
-                                                        placeholder="分录摘要(可选)"
-                                                        prop:value=item.1.summary
-                                                        on:input=move |ev| {
-                                                            let val = event_target_value(&ev);
-                                                            set_entries.update(|v| v[item.0].summary = val);
-                                                        }
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        class="form-input data-table-num"
-                                                        type="number"
-                                                        min="0"
-                                                        prop:value=item.1.debit
-                                                        on:input=move |ev| {
-                                                            let val = event_target_value(&ev);
-                                                            set_entries.update(|v| {
-                                                                v[item.0].debit = val;
-                                                                if !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0 {
-                                                                    v[item.0].credit = "0".to_string();
-                                                                }
-                                                            });
-                                                        }
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input
-                                                        class="form-input data-table-num"
-                                                        type="number"
-                                                        min="0"
-                                                        prop:value=item.1.credit
-                                                        on:input=move |ev| {
-                                                            let val = event_target_value(&ev);
-                                                            set_entries.update(|v| {
-                                                                v[item.0].credit = val;
-                                                                if !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0 {
-                                                                    v[item.0].debit = "0".to_string();
-                                                                }
-                                                            });
-                                                        }
-                                                    />
-                                                </td>
-                                                <td class="text-center">
-                                                    <button class="text-danger inline-flex" on:click=move |_| remove_row(item.0)>
-                                                        <Trash2 size=14 />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        </For>
-                                <tr class="bg-surface-alt">
-                                    <td class="text-secondary font-medium" colspan="2">"合计"</td>
-                                    <td></td>
-                                    <td class="data-table-num font-semibold text-primary">{debit_total}</td>
-                                    <td class="data-table-num font-semibold text-primary">{credit_total}</td>
-                                    <td></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div class="flex items-center gap-2 mt-3 text-13">
-                            <Show when=move || balanced.get()>
-                                <span class="tag tag-success">"借贷平衡"</span>
-                            </Show>
-                            <Show when=move || !balanced.get()>
-                                <span class="tag tag-danger">
-                                    {move || format!("不平衡: 借方 {} / 贷方 {}", debit_total.get(), credit_total.get())}
-                                </span>
-                            </Show>
-                        </div>
-                    </div>
-                    <div class="card-footer">
-                        <button class="btn btn-outline" on:click=move |_| window_print()>
-                            <Printer size=14 />
-                            "打印"
-                        </button>
-                        <button class="btn btn-primary" disabled=saving on:click=move |_| on_save()>
-                            {move || if saving.get() { "保存中…" } else { "保存凭证" }}
-                        </button>
+                    <div class="form-field mt-3">
+                        <label class="form-label">"摘要"</label>
+                        <input
+                            class="form-input"
+                            placeholder="本凭证摘要"
+                            prop:value=summary
+                            on:input=move |ev| set_summary.set(event_target_value(&ev))
+                        />
                     </div>
                 </div>
-
-                <Show when=move || error.get().is_some()>
-                    <div class="login-error mt-3">{move || error.get().unwrap_or_default()}</div>
-                </Show>
-                <Show when=move || success.get().is_some()>
-                    <div class="tag tag-success mt-3">{move || success.get().unwrap_or_default()}</div>
-                </Show>
             </div>
-        }
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <span class="card-title">"分录"</span>
+                    <button class="btn btn-outline btn-sm" on:click=move |_| add_row()>
+                        <Plus size=14 />
+                        "添加行"
+                    </button>
+                </div>
+                <div class="card-body dense">
+                    <table class="data-table" style="border:none">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width:48px">"序号"</th>
+                                <th>"科目"</th>
+                                <th>"摘要"</th>
+                                <th class="data-table-num" style="width:160px">"借方(分)"</th>
+                                <th class="data-table-num" style="width:160px">"贷方(分)"</th>
+                                <th class="text-center" style="width:60px">"操作"</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <For each=move || enumerated_entries.get() key=|item| item.1.uid.clone() let:item>
+                                <tr>
+                                    <td class="data-table-num">{item.0 + 1}</td>
+                                    <td>
+                                        <Suspense fallback=|| view! { <input class="form-input" disabled /> }>
+                                            {let idx = item.0;
+                                             let selected_id = item.1.account_id.clone();
+                                             move || {
+                                                 let idx = idx;
+                                                 let sel = selected_id.clone();
+                                                 Suspend::new(async move {
+                                                     let list = accounts.await.unwrap_or_default();
+                                                     let leaves: Vec<&Account> = list.iter().filter(|a| a.is_leaf).collect();
+                                                     let opts: Vec<_> = leaves.iter().map(|a| {
+                                                         let id = a.id.clone();
+                                                         let label = format!("{} · {}", a.code, a.name);
+                                                         let is_sel = sel == id;
+                                                         view! { <option value=id selected=is_sel>{label}</option> }
+                                                     }).collect();
+                                                     view! {
+                                                         <select
+                                                             class="form-select"
+                                                             on:change=move |ev| {
+                                                                 let id = event_target_value(&ev);
+                                                                 let acc = list.iter().find(|a| a.id == id).cloned();
+                                                                 set_entries.update(|v| {
+                                                                     if let Some(a) = acc {
+                                                                         v[idx].account_id = a.id;
+                                                                         v[idx].account_code = a.code;
+                                                                         v[idx].account_name = a.name;
+                                                                     }
+                                                                 });
+                                                             }
+                                                         >
+                                                             <option value="">"(选择科目)"</option>
+                                                             {opts}
+                                                         </select>
+                                                     }
+                                                 })
+                                             }}
+                                                </Suspense>
+                                            </td>
+                                            <td>
+                                                <input
+                                                    class="form-input"
+                                                    placeholder="分录摘要(可选)"
+                                                    prop:value=item.1.summary
+                                                    on:input=move |ev| {
+                                                        let val = event_target_value(&ev);
+                                                        let i = item.0;
+                                                        set_entries.update(|v| v[i].summary = val);
+                                                    }
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    class="form-input data-table-num"
+                                                    type="number"
+                                                    min="0"
+                                                    prop:value=item.1.debit
+                                                    on:input=move |ev| {
+                                                        let val = event_target_value(&ev);
+                                                        let i = item.0;
+                                                        let is_positive = !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0;
+                                                        set_entries.update(|v| {
+                                                            v[i].debit = val;
+                                                            if is_positive {
+                                                                v[i].credit = "0".to_string();
+                                                            }
+                                                        });
+                                                    }
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    class="form-input data-table-num"
+                                                    type="number"
+                                                    min="0"
+                                                    prop:value=item.1.credit
+                                                    on:input=move |ev| {
+                                                        let val = event_target_value(&ev);
+                                                        let i = item.0;
+                                                        let is_positive = !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0;
+                                                        set_entries.update(|v| {
+                                                            v[i].credit = val;
+                                                            if is_positive {
+                                                                v[i].debit = "0".to_string();
+                                                            }
+                                                        });
+                                                    }
+                                                />
+                                            </td>
+                                            <td class="text-center">
+                                                <button class="text-danger inline-flex" on:click=move |_| remove_row(item.0)>
+                                                    <Trash2 size=14 />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </For>
+                            <tr class="bg-surface-alt">
+                                <td class="text-secondary font-medium" colspan="2">"合计"</td>
+                                <td></td>
+                                <td class="data-table-num font-semibold text-primary">{debit_total}</td>
+                                <td class="data-table-num font-semibold text-primary">{credit_total}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="flex items-center gap-2 mt-3 text-13">
+                        <Show when=move || balanced.get()>
+                            <span class="tag tag-success">"借贷平衡"</span>
+                        </Show>
+                        <Show when=move || !balanced.get()>
+                            <span class="tag tag-danger">
+                                {move || format!("不平衡: 借方 {} / 贷方 {}", debit_total.get(), credit_total.get())}
+                            </span>
+                        </Show>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-outline" on:click=move |_| window_print()>
+                        <Printer size=14 />
+                        "打印"
+                    </button>
+                    <button class="btn btn-primary" disabled=saving on:click=move |_| on_save()>
+                        {move || if saving.get() { "保存中…" } else { "保存凭证" }}
+                    </button>
+                </div>
+            </div>
+
+            <Show when=move || error.get().is_some()>
+                <div class="login-error mt-3">{move || error.get().unwrap_or_default()}</div>
+            </Show>
+            <Show when=move || success.get().is_some()>
+                <div class="tag tag-success mt-3">{move || success.get().unwrap_or_default()}</div>
+            </Show>
+        </div>
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct EntryRow {
     uid: usize,
     account_id: String,

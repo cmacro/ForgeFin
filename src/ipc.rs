@@ -229,6 +229,7 @@ pub struct BackupEntry {
 // =====================================================================
 
 use js_sys::Reflect;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 
@@ -244,8 +245,13 @@ fn tauri_invoke(
             .map_err(|e| format!("TAURI.core 未注入: {e:?}"))?;
         let invoke_fn = Reflect::get(&core, &JsValue::from_str("invoke"))
             .map_err(|e| format!("TAURI.core.invoke 未注入: {e:?}"))?;
+        let invoke_fn = invoke_fn.dyn_into::<js_sys::Function>()
+            .map_err(|e| format!("invoke 不是 Function: {e:?}"))?;
         let cmd_val = JsValue::from_str(&cmd);
-        let promise = Reflect::apply(&invoke_fn, &JsValue::undefined(), &[cmd_val, args])
+        let args_arr = js_sys::Array::new();
+        args_arr.push(&cmd_val);
+        args_arr.push(&args);
+        let promise = Reflect::apply(&invoke_fn, &JsValue::undefined(), &args_arr)
             .map_err(|e| format!("invoke 调用失败: {e:?}"))?;
         let promise = wasm_bindgen::JsCast::dyn_into::<js_sys::Promise>(promise)
             .map_err(|e| format!("invoke 返回非 Promise: {e:?}"))?;
@@ -289,11 +295,11 @@ pub async fn list_companies() -> Result<Vec<Company>, String> {
 }
 
 pub async fn create_company(input: &CompanyInput) -> Result<Company, String> {
-    invoke("create_company_cmd", &[("input", input)]).await
+    invoke("create_company_cmd", &serde_json::json!({"input": input})).await
 }
 
 pub async fn update_company(id: String, input: &CompanyInput) -> Result<Company, String> {
-    invoke("update_company_cmd", &[("id", &id), ("input", input)]).await
+    invoke("update_company_cmd", &serde_json::json!({"id": id, "input": input})).await
 }
 
 pub async fn delete_company(id: String) -> Result<(), String> {
@@ -305,11 +311,11 @@ pub async fn list_accounts() -> Result<Vec<Account>, String> {
 }
 
 pub async fn create_account(input: &AccountInput) -> Result<Account, String> {
-    invoke("create_account_cmd", &[("input", input)]).await
+    invoke("create_account_cmd", &serde_json::json!({"input": input})).await
 }
 
 pub async fn update_account(id: String, input: &AccountInput) -> Result<Account, String> {
-    invoke("update_account_cmd", &[("id", &id), ("input", input)]).await
+    invoke("update_account_cmd", &serde_json::json!({"id": id, "input": input})).await
 }
 
 pub async fn delete_account(id: String) -> Result<(), String> {
@@ -321,11 +327,11 @@ pub async fn list_contacts(contact_type: Option<String>) -> Result<Vec<Contact>,
 }
 
 pub async fn create_contact(input: &ContactInput) -> Result<Contact, String> {
-    invoke("create_contact_cmd", &[("input", input)]).await
+    invoke("create_contact_cmd", &serde_json::json!({"input": input})).await
 }
 
 pub async fn update_contact(id: String, input: &ContactInput) -> Result<Contact, String> {
-    invoke("update_contact_cmd", &[("id", &id), ("input", input)]).await
+    invoke("update_contact_cmd", &serde_json::json!({"id": id, "input": input})).await
 }
 
 pub async fn delete_contact(id: String) -> Result<(), String> {
@@ -349,7 +355,7 @@ pub async fn delete_voucher(id: String) -> Result<(), String> {
 }
 
 pub async fn audit_voucher(id: String, comment: Option<String>) -> Result<Voucher, String> {
-    invoke("audit_voucher_cmd", &[("id", &id), ("comment", &comment)]).await
+    invoke("audit_voucher_cmd", &serde_json::json!({"id": id, "comment": comment})).await
 }
 
 pub async fn next_voucher_no(voucher_type: String, voucher_date: String) -> Result<String, String> {
@@ -382,11 +388,7 @@ pub async fn restore_company(
 ) -> Result<(), String> {
     invoke(
         "restore_company_cmd",
-        &[
-            ("company_id", &company_id),
-            ("backup_path", &backup_path),
-            ("confirm", &confirm),
-        ],
+        &serde_json::json!({"company_id": company_id, "backup_path": backup_path, "confirm": confirm}),
     )
     .await
 }

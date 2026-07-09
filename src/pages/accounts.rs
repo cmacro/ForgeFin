@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use lucide_leptos::{ChevronRight, Plus, Trash2};
+use lucide_leptos::{ChevronRight, Trash2};
 
 use crate::components::layout::modal::Modal;
 use crate::ipc::{self, Account, AccountInput};
@@ -7,7 +7,7 @@ use crate::ipc::{self, Account, AccountInput};
 /// 会计科目管理页(树形列表 + CRUD)。
 #[component]
 pub fn Accounts() -> impl IntoView {
-    let accounts = Resource::new(|| (), move |_| async { ipc::list_accounts().await });
+    let accounts = LocalResource::new(move || async { ipc::list_accounts().await });
     let (selected, set_selected) = signal(Option::<String>::None);
     let (edit_open, set_edit_open) = signal(false);
     let (editing, set_editing) = signal(Option::<Account>::None);
@@ -87,11 +87,11 @@ pub fn Accounts() -> impl IntoView {
                                         </div>
                                     </Show>
                                 </div>
-                            }
+                            }.into_any()
                         }
                         Err(e) => view! {
                             <div class="login-error">{format!("加载科目失败: {e}")}</div>
-                        },
+                        }.into_any(),
                     }
                 })}
             </Suspense>
@@ -149,8 +149,8 @@ fn AccountRow(
     depth: usize,
     selected: ReadSignal<Option<String>>,
     set_selected: WriteSignal<Option<String>>,
-    on_edit: impl Fn(Account) + 'static,
-    on_delete: impl Fn(String) + 'static,
+    on_edit: impl Fn(Account) + Clone + Send + Sync + 'static,
+    on_delete: impl Fn(String) + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
     let acc = node.account.clone();
     let children = node.children.clone();
@@ -161,6 +161,14 @@ fn AccountRow(
     let del_id = acc.id.clone();
     let row_acc = acc.clone();
     let indent = depth * 20;
+    let children_clone = children.clone();
+    let (children_signal, _) = signal(children_clone);
+    let on_edit_click = std::sync::Arc::new(on_edit.clone());
+    let on_delete_click = std::sync::Arc::new(on_delete.clone());
+    let on_edit_for = on_edit_click.clone();
+    let on_delete_for = on_delete_click.clone();
+    let on_edit_btn = on_edit_click.clone();
+    let on_delete_btn = on_delete_click.clone();
     view! {
         <tr
             class=("selected", move || selected.get() == Some(id.clone()))
@@ -193,22 +201,22 @@ fn AccountRow(
             </td>
             <td class="text-center border-l border-border" on:click=move |ev| ev.stop_propagation()>
                 <div class="flex items-center justify-center gap-4">
-                    <button class="text-xs text-brand" on:click=move |_| on_edit(edit_acc.clone())>"编辑"</button>
-                    <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(del_id.clone())>
+                    <button class="text-xs text-brand" on:click=move |_| on_edit_click(edit_acc.clone())>"编辑"</button>
+                    <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete_click(del_id.clone())>
                         <Trash2 size=12 />
                     </button>
                 </div>
             </td>
         </tr>
         <Show when=move || expanded.get()>
-            <For each=move || children.clone() key=|n| n.account.id.clone() let:child>
+            <For each=move || children_signal.get() key=|n| n.account.id.clone() let:child>
                 <AccountRow
                     node=child
                     depth=depth + 1
                     selected=selected
                     set_selected=set_selected
-                    on_edit=on_edit
-                    on_delete=on_delete
+                    on_edit=on_edit_for
+                    on_delete=on_delete_for
                 />
             </For>
         </Show>
@@ -238,9 +246,9 @@ fn direction_label(d: &str) -> &'static str {
 fn AccountEditModal(
     open: ReadSignal<bool>,
     editing: ReadSignal<Option<Account>>,
-    accounts: Resource<(), Result<Vec<Account>, String>>,
+    accounts: ArcLocalResource<Result<Vec<Account>, String>>,
     set_open: WriteSignal<bool>,
-    on_saved: impl Fn() + 'static,
+    on_saved: impl Fn() + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
     let (code, set_code) = signal(String::new());
     let (name, set_name) = signal(String::new());
@@ -273,8 +281,8 @@ fn AccountEditModal(
     });
 
     let close = move || set_open.set(false);
-    let close_rc = std::rc::Rc::new(close);
 
+    let saved = on_saved.clone();
     let on_submit = move || {
         let editing_id = editing.get().map(|a| a.id);
         let input = AccountInput {
@@ -292,6 +300,7 @@ fn AccountEditModal(
         };
         set_saving.set(true);
         set_error.set(None);
+        let saved = saved.clone();
         leptos::task::spawn_local(async move {
             let res = if let Some(id) = editing_id {
                 ipc::update_account(id, &input).await
@@ -302,16 +311,17 @@ fn AccountEditModal(
             match res {
                 Ok(_) => {
                     set_open.set(false);
-                    on_saved();
+                    saved();
                 }
                 Err(e) => set_error.set(Some(e)),
             }
         });
     };
+    let on_submit = std::sync::Arc::new(on_submit);
 
     let title_static: &'static str = "科目编辑";
     view! {
-        <Modal open=open title=title_static on_close=close_rc>
+        <Modal open=open title=title_static on_close=close>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">
@@ -372,8 +382,8 @@ fn AccountEditModal(
                     >
                         <option value="">"(无,作为一级科目)"</option>
                         {move || {
-                            match accounts.get().unwrap_or_default() {
-                                Ok(list) => list
+                            match accounts.get() {
+                                Some(Ok(list)) => list
                                     .iter()
                                     .map(|a| {
                                         let id = a.id.clone();
@@ -383,7 +393,7 @@ fn AccountEditModal(
                                         }
                                     })
                                     .collect::<Vec<_>>(),
-                                Err(_) => Vec::new(),
+                                _ => Vec::new(),
                             }
                         }}
                     </select>

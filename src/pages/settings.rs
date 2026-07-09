@@ -244,6 +244,7 @@ fn RestoreButton(backup: BackupEntry, on_restore_ok: impl Fn() + 'static) -> imp
     let (target, set_target) = signal(String::new());
     let (err, set_err) = signal(Option::<String>::None);
     let (busy, set_busy) = signal(false);
+    let backup_path = backup.path.clone();
 
     let on_submit = move || {
         let cid = target.get();
@@ -254,7 +255,7 @@ fn RestoreButton(backup: BackupEntry, on_restore_ok: impl Fn() + 'static) -> imp
         set_busy.set(true);
         set_err.set(None);
         leptos::task::spawn_local(async move {
-            match ipc::restore_company(cid, backup.path.clone(), true).await {
+            match ipc::restore_company(cid, backup_path, true).await {
                 Ok(_) => {
                     set_open.set(false);
                     on_restore_ok();

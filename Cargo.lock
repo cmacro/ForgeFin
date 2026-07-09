@@ -1322,6 +1322,7 @@ dependencies = [
  "lucide-leptos",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

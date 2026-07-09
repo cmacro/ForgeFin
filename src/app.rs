@@ -59,7 +59,7 @@ fn MainShell() -> impl IntoView {
     let has_company = Session::has_company();
 
     let children = move || {
-        if !has_company.get() {
+        if !has_company {
             return view! { <NoCompany /> }.into_any();
         }
         let key = active.get();

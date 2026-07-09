@@ -80,10 +80,11 @@ impl Session {
     /// 登录成功后写入会话。
     pub async fn login(username: String, password: String) -> Result<(), String> {
         let res = ipc::login(username, password).await?;
+        let companies = res.companies.clone();
         SESSION.set(Some(res.user));
-        AVAILABLE.set(res.companies);
+        AVAILABLE.set(companies.clone());
         // 自动选第一个公司(若有)。
-        if let Some(first) = res.companies.first() {
+        if let Some(first) = companies.first() {
             let id = first.id.clone();
             ipc::set_current_company(id.clone()).await?;
             COMPANY_ID.set(Some(id));

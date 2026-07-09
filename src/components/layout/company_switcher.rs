@@ -17,13 +17,13 @@ pub fn CompanySwitcher() -> impl IntoView {
         available
             .get()
             .iter()
-            .find(|c| c.id == cid)
+            .find(|c| Some(c.id.clone()) == cid)
             .map(|c| c.name.clone())
             .unwrap_or_else(|| "未选择".to_string())
     };
 
     view! {
-        <Show when=move || available.get().len() > 1>
+        <Show when=move || { available.get().len() > 1 }>
             <div class="company-switcher" on:click=move |_| set_open.update(|v| *v = !*v)>
                 <span class="company-switcher-label">"账套"</span>
                 <span>{current_name}</span>
@@ -43,7 +43,10 @@ pub fn CompanySwitcher() -> impl IntoView {
                         <For each=move || available.get() key=|c| c.id.clone() let:c>
                             <div
                                 class="sidebar-item"
-                                class=("active", move || company_id.get() == Some(c.id.clone()))
+                                class=("active", {
+                                    let cid = c.id.clone();
+                                    move || company_id.get() == Some(cid.clone())
+                                })
                                 style="color:var(--color-primary);border-radius:var(--radius-md)"
                                 on:click=move |_| {
                                     let id = c.id.clone();

@@ -99,6 +99,7 @@ pub fn Contacts() -> impl IntoView {
                 {move || Suspend::new(async move {
                     let _ = contacts.await;
                     let rows = filtered();
+                    let rows_enumerated = move || rows.clone().into_iter().enumerate().collect::<Vec<_>>();
                     view! {
                         <div class="data-table flex flex-col min-h-0">
                             <div class="flex-1 overflow-auto">
@@ -116,23 +117,23 @@ pub fn Contacts() -> impl IntoView {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <For each=move || rows.clone() key=|c| c.id.clone() let:(idx, c)>
+                                        <For each=rows_enumerated key=|(_, c)| c.id.clone() let:item>
                                             <tr>
-                                                <td class="data-table-num">{idx + 1}</td>
-                                                <td class="data-table-num">{c.code.clone()}</td>
-                                                <td>{c.name.clone()}</td>
-                                                <td>{type_label(&c.contact_type)}</td>
-                                                <td>{c.tax_id.clone().unwrap_or("—".to_string())}</td>
-                                                <td>{c.phone.clone().unwrap_or("—".to_string())}</td>
+                                                <td class="data-table-num">{item.0 + 1}</td>
+                                                <td class="data-table-num">{item.1.code.clone()}</td>
+                                                <td>{item.1.name.clone()}</td>
+                                                <td>{type_label(&item.1.contact_type)}</td>
+                                                <td>{item.1.tax_id.clone().unwrap_or("—".to_string())}</td>
+                                                <td>{item.1.phone.clone().unwrap_or("—".to_string())}</td>
                                                 <td class="text-center">
-                                                    <span class=format!("tag {}", if c.is_active { "tag-success" } else { "tag-draft" })>
-                                                        {if c.is_active { "启用" } else { "停用" }}
+                                                    <span class=format!("tag {}", if item.1.is_active { "tag-success" } else { "tag-draft" })>
+                                                        {if item.1.is_active { "启用" } else { "停用" }}
                                                     </span>
                                                 </td>
                                                 <td class="text-center border-l border-border">
                                                     <div class="flex items-center justify-center gap-4">
-                                                        <button class="text-xs text-brand" on:click=move |_| open_edit(c.clone())>"编辑"</button>
-                                                        <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(c.id.clone())>
+                                                        <button class="text-xs text-brand" on:click=move |_| open_edit(item.1.clone())>"编辑"</button>
+                                                        <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(item.1.id.clone())>
                                                             <Trash2 size=12 />
                                                         </button>
                                                     </div>
@@ -177,7 +178,7 @@ fn ContactEditModal(
     open: ReadSignal<bool>,
     editing: ReadSignal<Option<Contact>>,
     set_open: WriteSignal<bool>,
-    on_saved: impl Fn() + 'static,
+    on_saved: impl Fn() + Clone + Send + Sync + 'static,
 ) -> impl IntoView {
     let (code, set_code) = signal(String::new());
     let (name, set_name) = signal(String::new());
@@ -222,8 +223,8 @@ fn ContactEditModal(
     });
 
     let close = move || set_open.set(false);
-    let close_rc = std::rc::Rc::new(close);
 
+    let saved = on_saved.clone();
     let on_submit = move || {
         let editing_id = editing.get().map(|c| c.id);
         let input = ContactInput {
@@ -251,7 +252,7 @@ fn ContactEditModal(
             match res {
                 Ok(_) => {
                     set_open.set(false);
-                    on_saved();
+                    saved();
                 }
                 Err(e) => set_error.set(Some(e)),
             }
@@ -259,7 +260,7 @@ fn ContactEditModal(
     };
 
     view! {
-        <Modal open=open title="客户/供应商" size="lg" on_close=close_rc>
+        <Modal open=open title="客户/供应商" size=Some("lg") on_close=close>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">

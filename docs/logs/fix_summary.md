@@ -536,6 +536,154 @@ on_delete: impl Fn(String) + Clone + Send + Sync + 'static,
 
 ---
 
+## 26. `voucher_entry.rs` 中 `FnOnce` 闭包冲突
+
+**文件**: `src/pages/voucher_entry.rs:223`
+
+**问题**: `move || Suspend::new(async move { ... })` 报错 `closure implements FnOnce, not FnMut`，因为 `item.0` 和 `item.1` 被移动到了闭包中。
+
+**分析**: `For` 组件的 `let:item` 绑定在 `view!` 宏中，`item` 被 `move` 闭包捕获后，后续的 `item.0` 和 `item.1` 引用无法再使用。
+
+**处理**: 在闭包之前提取 `idx` 和 `row`，在闭包内使用 `idx` 和 `row` 替代 `item.0` 和 `item.1`。
+
+```rust
+// 修改前
+{move || {
+    Suspend::new(async move {
+        set_entries.update(|v| v[item.0].summary = val);
+    })
+}}
+
+// 修改后
+{let idx = item.0;
+ let row = item.1.clone();
+ move || {
+    Suspend::new(async move {
+        set_entries.update(|v| v[idx].summary = val);
+    })
+}}
+```
+
+---
+
+## 27. `voucher_entry.rs` 中 `val` 移动后再次借用
+
+**文件**: `src/pages/voucher_entry.rs:279-285`
+
+**问题**: `set_entries.update(|v| { v[i].debit = val; if !val.is_empty() ... })` 报错 `borrow of moved value: val`。
+
+**分析**: `val` 被移动到 `update` 闭包后，后续的 `val.is_empty()` 无法再访问。
+
+**处理**: 在 `update` 闭包之前计算 `is_positive` 布尔值，闭包内只使用布尔值。
+
+```rust
+// 修改前
+set_entries.update(|v| {
+    v[i].debit = val;
+    if !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0 { ... }
+});
+
+// 修改后
+let is_positive = !val.is_empty() && val.parse::<i64>().unwrap_or(0) > 0;
+set_entries.update(|v| {
+    v[i].debit = val;
+    if is_positive { ... }
+});
+```
+
+---
+
+## 28. `voucher.rs` 中 `detail` Resource 类型推断错误
+
+**文件**: `src/pages/voucher.rs:38-47`
+
+**问题**: `Resource::new` 创建的 `detail` 被推断为 `Resource<Option<VoucherDetail>>`（单参数），但 `VoucherDetail` 组件期望 `Resource<Option<String>, Option<VoucherDetail>>`（双参数）。
+
+**分析**: Leptos 0.8 的 `Resource::new` 当源信号是 `Option<T>` 时，会推断为单参数 Resource。需要显式使用元组源信号来创建双参数 Resource。
+
+**处理**: 将源信号改为 `(selected_id.get(),)` 元组，并在异步函数中使用 `(id,)` 解构。
+
+```rust
+// 修改前
+let detail = Resource::new(
+    move || selected_id.get(),
+    move |id| async move { ... },
+);
+
+// 修改后
+let detail = Resource::new(
+    move || (selected_id.get(),),
+    move |(id,)| async move { ... },
+);
+```
+
+---
+
+## 29. `voucher.rs` 中 `Suspense` 子元素 `FnOnce` 错误
+
+**文件**: `src/pages/voucher.rs:434-437`
+
+**问题**: `Suspense` 的子元素闭包报错 `FnOnce`，因为闭包捕获了 `on_audit` 和 `on_delete`（`Arc<dyn Fn>`），但 `Arc<dyn Fn>` 不是 `Send`。
+
+**分析**: `Suspense` 的子元素需要实现 `IntoView + Send + 'static`。`Arc<dyn Fn>` 是 `Send + Sync`，但闭包捕获了 `detail`（`Resource`），`Resource` 的 `get()` 方法需要 `Send` 环境。
+
+**处理**: 在闭包之前克隆 `detail`、`on_audit`、`on_delete`，在闭包内再次克隆后使用。
+
+```rust
+// 修改前
+{move || {
+    match detail.get() { ... }
+}}
+
+// 修改后
+{let detail = detail.clone();
+ let on_audit = on_audit.clone();
+ let on_delete = on_delete.clone();
+ move || {
+    let detail = detail.clone();
+    let on_audit = on_audit.clone();
+    let on_delete = on_delete.clone();
+    match detail.get() { ... }
+}}
+```
+
+---
+
+## 30. `voucher.rs` 中 `logs` 闭包生命周期错误
+
+**文件**: `src/pages/voucher.rs:527-551`
+
+**问题**: `logs.iter().map(|log| { ... view! { <Show when=move || log.comment.is_some()> ... } })` 报错 `lifetime may not live long enough`。
+
+**分析**: `move` 闭包捕获了 `log` 的引用，但 `log` 的生命周期仅限于 `map` 迭代器内部。
+
+**处理**: 在 `map` 闭包中克隆 `log`，并提取 `has_comment` 和 `comment` 变量，避免在 `view!` 宏中直接引用 `log`。
+
+```rust
+// 修改前
+logs.iter().map(|log| {
+    view! {
+        <Show when=move || log.comment.is_some()>
+            <div>{log.comment.clone().unwrap_or_default()}</div>
+        </Show>
+    }
+})
+
+// 修改后
+logs.iter().map(|log| {
+    let log = log.clone();
+    let has_comment = log.comment.is_some();
+    let comment = log.comment.clone().unwrap_or_default();
+    view! {
+        <Show when=move || has_comment>
+            <div>{comment.clone()}</div>
+        </Show>
+    }
+})
+```
+
+---
+
 ## 错误日志文件
 
 完整的 `cargo check` 错误输出已保存至：
@@ -545,7 +693,7 @@ docs/logs/error_log.txt
 
 ## 总结
 
-本次修复共涉及 **25 类** 编译错误，覆盖了以下方面：
+本次修复共涉及 **30 类** 编译错误，覆盖了以下方面：
 
 | 类别 | 数量 | 主要文件 |
 |------|------|----------|
@@ -553,7 +701,7 @@ docs/logs/error_log.txt
 | `Resource` 使用错误（`.get().await` → `.await`） | 6 处 | `voucher.rs`, `settings.rs`, `accounts.rs`, `contacts.rs` |
 | `For` 组件语法错误 | 4 处 | `voucher_entry.rs`, `voucher.rs`, `contacts.rs` |
 | 类型不匹配（`Option`/`String`/`Result`） | 5 处 | `settings.rs`, `contacts.rs`, `company_switcher.rs` |
-| 所有权/借用错误 | 3 处 | `auth.rs`, `voucher.rs` |
+| 所有权/借用错误 | 5 处 | `auth.rs`, `voucher.rs`, `voucher_entry.rs` |
 | 信号/闭包使用错误 | 3 处 | `voucher_entry.rs`, `app.rs` |
 | 线程安全约束 | 3 处 | `modal.rs`, `accounts.rs` |
 | 其他 | 5 处 | `ipc.rs`, `auth.rs` 等 |
