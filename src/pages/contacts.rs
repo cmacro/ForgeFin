@@ -139,11 +139,15 @@ pub fn Contacts() -> impl IntoView {
                                                         let c1 = c.clone();
                                                         let c2 = c.clone();
                                                         view! {
-                                                        <button class="text-xs text-brand" on:click=move |_| open_edit(c1)>"编辑"</button>
-                                                        <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(c2.id.clone())>
+                                                         <button class="text-xs text-brand" on:click=move |_| open_edit(c1.clone())>"编辑"</button>
+                                                         <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(c2.id.clone())>
                                                             <Trash2 size=12 />
                                                         </button>
                                                         }}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </For>
                                     </tbody>
                                 </table>
                                 <Show when=move || rows_empty.is_empty()>
