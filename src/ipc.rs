@@ -266,9 +266,7 @@ pub async fn invoke<T: serde::de::DeserializeOwned>(
     cmd: &str,
     args: &impl Serialize,
 ) -> Result<T, String> {
-    let json_str = serde_json::to_string(args).map_err(|e| e.to_string())?;
-    let args_val = js_sys::JSON::parse(&json_str)
-        .map_err(|e| format!("JSON 解析失败: {e:?}"))?;
+    let args_val = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
     let res = tauri_invoke(cmd.to_string(), args_val).await?;
     serde_wasm_bindgen::from_value(res).map_err(|e| e.to_string())
 }
