@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 
-/// 初始化系统库 schema。
+use super::system;
+
+/// 初始化系统库 schema,并在无用户时创建默认 admin 用户。
 ///
 /// 系统库 `forgefin_system.db` 存放跨公司共享的注册信息:
 /// - users: 用户(可跨公司)
@@ -56,6 +58,15 @@ pub fn init_system(conn: &Connection) -> Result<(), String> {
         ",
     )
     .map_err(|e| format!("系统库建表失败: {e}"))?;
+
+    // 无用户时自动创建默认 admin 用户(开发测试用)
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM users", [], |r| r.get(0))
+        .map_err(|e| format!("查询用户数失败: {e}"))?;
+    if count == 0 {
+        system::create_user(conn, "admin", "管理员", "admin", None, true)?;
+    }
+
     Ok(())
 }
 

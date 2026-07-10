@@ -31,7 +31,7 @@ fn AppRouter() -> impl IntoView {
     let user = Session::user();
 
     view! {
-        <Show when=move || loading.get() fallback=|| view! { <LoadingScreen /> }>
+        <Show when=move || !loading.get() fallback=|| view! { <LoadingScreen /> }>
             <div />
         </Show>
         <Show when=move || !loading.get() && user.get().is_none()>

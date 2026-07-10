@@ -245,7 +245,8 @@ fn tauri_invoke(
             .map_err(|e| format!("TAURI.core 未注入: {e:?}"))?;
         let invoke_fn = Reflect::get(&core, &JsValue::from_str("invoke"))
             .map_err(|e| format!("TAURI.core.invoke 未注入: {e:?}"))?;
-        let invoke_fn = invoke_fn.dyn_into::<js_sys::Function>()
+        let invoke_fn = invoke_fn
+            .dyn_into::<js_sys::Function>()
             .map_err(|e| format!("invoke 不是 Function: {e:?}"))?;
         let cmd_val = JsValue::from_str(&cmd);
         let args_arr = js_sys::Array::new();
@@ -299,7 +300,11 @@ pub async fn create_company(input: &CompanyInput) -> Result<Company, String> {
 }
 
 pub async fn update_company(id: String, input: &CompanyInput) -> Result<Company, String> {
-    invoke("update_company_cmd", &serde_json::json!({"id": id, "input": input})).await
+    invoke(
+        "update_company_cmd",
+        &serde_json::json!({"id": id, "input": input}),
+    )
+    .await
 }
 
 pub async fn delete_company(id: String) -> Result<(), String> {
@@ -315,7 +320,11 @@ pub async fn create_account(input: &AccountInput) -> Result<Account, String> {
 }
 
 pub async fn update_account(id: String, input: &AccountInput) -> Result<Account, String> {
-    invoke("update_account_cmd", &serde_json::json!({"id": id, "input": input})).await
+    invoke(
+        "update_account_cmd",
+        &serde_json::json!({"id": id, "input": input}),
+    )
+    .await
 }
 
 pub async fn delete_account(id: String) -> Result<(), String> {
@@ -331,7 +340,11 @@ pub async fn create_contact(input: &ContactInput) -> Result<Contact, String> {
 }
 
 pub async fn update_contact(id: String, input: &ContactInput) -> Result<Contact, String> {
-    invoke("update_contact_cmd", &serde_json::json!({"id": id, "input": input})).await
+    invoke(
+        "update_contact_cmd",
+        &serde_json::json!({"id": id, "input": input}),
+    )
+    .await
 }
 
 pub async fn delete_contact(id: String) -> Result<(), String> {
@@ -355,7 +368,11 @@ pub async fn delete_voucher(id: String) -> Result<(), String> {
 }
 
 pub async fn audit_voucher(id: String, comment: Option<String>) -> Result<Voucher, String> {
-    invoke("audit_voucher_cmd", &serde_json::json!({"id": id, "comment": comment})).await
+    invoke(
+        "audit_voucher_cmd",
+        &serde_json::json!({"id": id, "comment": comment}),
+    )
+    .await
 }
 
 pub async fn next_voucher_no(voucher_type: String, voucher_date: String) -> Result<String, String> {
