@@ -75,8 +75,8 @@ pub fn Accounts() -> impl IntoView {
                                                     depth=0
                                                     selected=selected
                                                     set_selected=set_selected
-                                                    on_edit=open_edit
-                                                    on_delete=on_delete
+                                                    on_edit=Callback::new(open_edit)
+                                                    on_delete=Callback::new(on_delete)
                                                 />
                                             </For>
                                         </tbody>
@@ -99,9 +99,9 @@ pub fn Accounts() -> impl IntoView {
         <AccountEditModal
             open=edit_open
             editing=editing
-            accounts=accounts
+            accounts=accounts.into()
             set_open=set_edit_open
-            on_saved=move || refresh()
+            on_saved=Callback::new(move |_| refresh())
         />
     }
 }
@@ -149,12 +149,13 @@ fn AccountRow(
     depth: usize,
     selected: ReadSignal<Option<String>>,
     set_selected: WriteSignal<Option<String>>,
-    on_edit: impl Fn(Account) + Clone + Send + Sync + 'static,
-    on_delete: impl Fn(String) + Clone + Send + Sync + 'static,
+    on_edit: Callback<Account>,
+    on_delete: Callback<String>,
 ) -> impl IntoView {
     let acc = node.account.clone();
     let children = node.children.clone();
     let id = acc.id.clone();
+    let id_for_click = id.clone();
     let has_children = !children.is_empty();
     let (expanded, set_expanded) = signal(true);
     let edit_acc = acc.clone();
@@ -163,16 +164,10 @@ fn AccountRow(
     let indent = depth * 20;
     let children_clone = children.clone();
     let (children_signal, _) = signal(children_clone);
-    let on_edit_click = std::sync::Arc::new(on_edit.clone());
-    let on_delete_click = std::sync::Arc::new(on_delete.clone());
-    let on_edit_for = on_edit_click.clone();
-    let on_delete_for = on_delete_click.clone();
-    let on_edit_btn = on_edit_click.clone();
-    let on_delete_btn = on_delete_click.clone();
     view! {
         <tr
             class=("selected", move || selected.get() == Some(id.clone()))
-            on:click=move |_| set_selected.set(Some(id.clone()))
+            on:click=move |_| set_selected.set(Some(id_for_click.clone()))
         >
             <td class="data-table-num text-tertiary">"—"</td>
             <td class="data-table-num">
@@ -201,8 +196,8 @@ fn AccountRow(
             </td>
             <td class="text-center border-l border-border" on:click=move |ev| ev.stop_propagation()>
                 <div class="flex items-center justify-center gap-4">
-                    <button class="text-xs text-brand" on:click=move |_| on_edit_click(edit_acc.clone())>"编辑"</button>
-                    <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete_click(del_id.clone())>
+                    <button class="text-xs text-brand" on:click=move |_| on_edit.run(edit_acc.clone())>"编辑"</button>
+                    <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete.run(del_id.clone())>
                         <Trash2 size=12 />
                     </button>
                 </div>
@@ -210,14 +205,16 @@ fn AccountRow(
         </tr>
         <Show when=move || expanded.get()>
             <For each=move || children_signal.get() key=|n| n.account.id.clone() let:child>
-                <AccountRow
-                    node=child
-                    depth=depth + 1
-                    selected=selected
-                    set_selected=set_selected
-                    on_edit=on_edit_for
-                    on_delete=on_delete_for
-                />
+                {view! {
+                    <AccountRow
+                        node=child
+                        depth=depth + 1
+                        selected=selected
+                        set_selected=set_selected
+                        on_edit=on_edit
+                        on_delete=on_delete
+                    />
+                }.into_any()}
             </For>
         </Show>
     }
@@ -248,7 +245,7 @@ fn AccountEditModal(
     editing: ReadSignal<Option<Account>>,
     accounts: ArcLocalResource<Result<Vec<Account>, String>>,
     set_open: WriteSignal<bool>,
-    on_saved: impl Fn() + Clone + Send + Sync + 'static,
+    on_saved: Callback<()>,
 ) -> impl IntoView {
     let (code, set_code) = signal(String::new());
     let (name, set_name) = signal(String::new());
@@ -280,10 +277,9 @@ fn AccountEditModal(
         }
     });
 
-    let close = move || set_open.set(false);
+    let close = move |_| set_open.set(false);
 
-    let saved = on_saved.clone();
-    let on_submit = move || {
+    let on_submit = Callback::new(move |_| {
         let editing_id = editing.get().map(|a| a.id);
         let input = AccountInput {
             code: code.get(),
@@ -300,7 +296,6 @@ fn AccountEditModal(
         };
         set_saving.set(true);
         set_error.set(None);
-        let saved = saved.clone();
         leptos::task::spawn_local(async move {
             let res = if let Some(id) = editing_id {
                 ipc::update_account(id, &input).await
@@ -311,17 +306,15 @@ fn AccountEditModal(
             match res {
                 Ok(_) => {
                     set_open.set(false);
-                    saved();
+                    on_saved.run(());
                 }
                 Err(e) => set_error.set(Some(e)),
             }
         });
-    };
-    let on_submit = std::sync::Arc::new(on_submit);
-
+    });
     let title_static: &'static str = "科目编辑";
     view! {
-        <Modal open=open title=title_static on_close=close>
+        <Modal open=open title=title_static on_close=Callback::new(close)>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">
@@ -381,7 +374,8 @@ fn AccountEditModal(
                         }
                     >
                         <option value="">"(无,作为一级科目)"</option>
-                        {move || {
+                        {let accounts = accounts.clone();
+                        move || {
                             match accounts.get() {
                                 Some(Ok(list)) => list
                                     .iter()
@@ -421,8 +415,8 @@ fn AccountEditModal(
                 </Show>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" type="button" on:click=move |_| close()>"取消"</button>
-                <button class="btn btn-primary" type="button" disabled=saving on:click=move |_| on_submit()>
+                <button class="btn btn-outline" type="button" on:click=move |_| close(())>"取消"</button>
+                <button class="btn btn-primary" type="button" disabled=saving on:click=move |_| on_submit.run(())>
                     {move || if saving.get() { "保存中…" } else { "保存" }}
                 </button>
             </div>

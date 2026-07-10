@@ -30,12 +30,10 @@ pub struct SelectOption {
 #[component]
 pub fn SearchForm(
     fields: Vec<SearchField>,
-    #[prop(default = std::rc::Rc::new(|| {}))] on_search: std::rc::Rc<dyn Fn()>,
-    #[prop(default = std::rc::Rc::new(|| {}))] on_reset: std::rc::Rc<dyn Fn()>,
+    #[prop(default = Callback::new(|_| {}))] on_search: Callback<()>,
+    #[prop(default = Callback::new(|_| {}))] on_reset: Callback<()>,
     #[prop(default = false)] expandable: bool,
 ) -> impl IntoView {
-    let search = on_search.clone();
-    let reset = on_reset.clone();
     let (expanded, set_expanded) = signal(false);
     let visible_fields = move || {
         if !expandable || expanded.get() {
@@ -106,10 +104,10 @@ pub fn SearchForm(
                     </button>
                 </Show>
                 <div class="search-form-btn-group">
-                    <button class="btn btn-outline" on:click=move |_| reset()>
+                    <button class="btn btn-outline" on:click=move |_| on_reset.run(())>
                         "重置"
                     </button>
-                    <button class="btn btn-primary" on:click=move |_| search()>
+                    <button class="btn btn-primary" on:click=move |_| on_search.run(())>
                         "查询"
                     </button>
                 </div>

@@ -48,14 +48,15 @@ pub fn CompanySwitcher() -> impl IntoView {
                                     move || company_id.get() == Some(cid.clone())
                                 })
                                 style="color:var(--color-primary);border-radius:var(--radius-md)"
-                                on:click=move |_| {
-                                    let id = c.id.clone();
+                                on:click={let id = c.id.clone();
+                                move |_| {
+                                    let id = id.clone();
                                     leptos::task::spawn_local(async move {
                                         if Session::switch_company(id).await.is_ok() {
                                             set_open.set(false);
                                         }
                                     });
-                                }
+                                }}
                             >
                                 <span>{c.name.clone()}</span>
                             </div>

@@ -10,6 +10,7 @@
 | 类型不匹配 | #12, #15, #18, #21 | `Option`/`String`/`Result` 比较 |
 | 线程安全 | #16, #24, #29 | `Send`/`Sync` 约束缺失 |
 | 信号/闭包 | #3, #13, #25 | 普通闭包 vs `Memo`/`Signal` |
+| 事件回调 | #16, #24, #31 | `impl Fn + Clone + Send + Sync` → `Callback` |
 | 其他 | #1, #2, #7, #9, #10, #17, #23 | 杂项 |
 
 ---
@@ -618,13 +619,88 @@ logs.iter().map(|log| {
 
 ---
 
+## 31. `E0225` — `Arc<dyn Fn + Clone + Send + Sync>` 不合法，改用 `Callback`
+
+**文件**: `src/components/layout/modal.rs`, `src/pages/voucher.rs`, `src/pages/accounts.rs`, `src/pages/contacts.rs`, `src/pages/settings.rs`, `src/components/form/search_form.rs`
+
+**错误**: `E0225` — `only auto traits can be used as additional traits in a trait object`
+
+**根因**: Rust 不允许在 trait 对象（`dyn Fn()`）上叠加非 auto trait（如 `Clone`）。`Send`/`Sync` 是 auto trait 可以叠加，但 `Clone` 不是。
+
+**修复**: 全部改用 Leptos 0.8 的 `Callback<T>`，它自带 `Clone + Send + Sync + 'static`。
+
+```rust
+// ❌ 错误: Arc<dyn Fn + Clone + Send + Sync> 不合法
+on_close: std::sync::Arc<dyn Fn() + Clone + Send + Sync + 'static>,
+
+// ❌ 错误: impl Fn + Clone + Send + Sync 在 For 组件 children 中传递会爆炸
+on_edit: impl Fn(Account) + Clone + Send + Sync + 'static,
+
+// ✅ 正确: 使用 Callback
+on_close: Callback<()>,
+on_edit: Callback<Account>,
+on_delete: Callback<String>,
+on_audit: Callback<(String, Option<String>)>,
+on_saved: Callback<()>,
+```
+
+**调用方式**:
+```rust
+// 调用 Callback 使用 .run() 方法
+on_close.run(());
+on_edit.run(account.clone());
+on_delete.run(id.clone());
+on_audit.run((id.clone(), comment));
+```
+
+**创建 Callback**:
+```rust
+// 闭包必须接受一个参数（即使不需要也用 |_|）
+Callback::new(move |_| refresh())
+Callback::new(move |(id, comment): (String, Option<String>)| { ... })
+
+// 默认值
+#[prop(default = Callback::new(|_| {}))] on_search: Callback<()>,
+```
+
+**关键规则**:
+1. `Callback<T>` 的闭包签名必须是 `Fn(T)` — 即使不需要参数也要写 `|_|`
+2. 多参数用元组：`Callback<(String, Option<String>)>` → 闭包 `|(a, b): (String, Option<String>)|`
+3. 调用用 `.run(input)` 而非 `input()` 或 `.call(input)`
+4. `Callback` 自带 `Clone + Send + Sync + 'static`，无需额外约束
+5. 不再需要 `Arc`/`Rc` 包裹，不再需要手动 `.clone()` 再调用
+
+**文件**: `src/pages/voucher.rs`
+
+**错误**: `lifetime may not live long enough`
+
+**根因**: `move` 闭包捕获了 `log` 的引用，但 `log` 生命周期仅限于 `map` 迭代器。
+
+**修复**: 克隆 `log` 并提取变量。
+```rust
+// 修改前
+logs.iter().map(|log| {
+    view! { <Show when=move || log.comment.is_some()> ... </Show> }
+})
+
+// 修改后
+logs.iter().map(|log| {
+    let log = log.clone();
+    let has_comment = log.comment.is_some();
+    let comment = log.comment.clone().unwrap_or_default();
+    view! { <Show when=move || has_comment> ... </Show> }
+})
+```
+
+---
+
 ## 通用修复原则
 
 1. **`Resource` 使用**: 直接 `.await`，不要 `.get().await`
 2. **`For` 组件**: 使用 `let:item` 而非 `let:(a, b)`，复杂 `each` 闭包用 `Memo` 封装
 3. **闭包所有权**: 在 `move` 闭包前克隆所有需要多次使用的变量
 4. **`match` 分支**: 使用 `.into_any()` 统一 `view!` 返回类型
-5. **线程安全**: 组件参数添加 `Clone + Send + Sync + 'static` 约束
+5. **事件回调**: 全部使用 `Callback<T>`，不要用 `impl Fn + Clone + Send + Sync` 或 `Arc<dyn Fn + Clone + Send + Sync>`
 6. **`Suspense` 子元素**: 需要 `IntoView + Send + 'static`
 7. **`static` 信号**: 使用 `LazyLock` 包裹
 8. **`invoke` 参数**: 结构体需序列化为 JSON 字符串

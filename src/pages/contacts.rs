@@ -99,7 +99,10 @@ pub fn Contacts() -> impl IntoView {
                 {move || Suspend::new(async move {
                     let _ = contacts.await;
                     let rows = filtered();
-                    let rows_enumerated = move || rows.clone().into_iter().enumerate().collect::<Vec<_>>();
+                    let rows_empty = rows.clone();
+                    let rows_len = rows.len() as i32;
+                    let rows_for = rows.clone();
+                    let rows_enumerated = move || rows_for.iter().cloned().enumerate().collect::<Vec<_>>();
                     view! {
                         <div class="data-table flex flex-col min-h-0">
                             <div class="flex-1 overflow-auto">
@@ -132,24 +135,25 @@ pub fn Contacts() -> impl IntoView {
                                                 </td>
                                                 <td class="text-center border-l border-border">
                                                     <div class="flex items-center justify-center gap-4">
-                                                        <button class="text-xs text-brand" on:click=move |_| open_edit(item.1.clone())>"编辑"</button>
-                                                        <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(item.1.id.clone())>
+                                                        {let c = item.1.clone();
+                                                        let c1 = c.clone();
+                                                        let c2 = c.clone();
+                                                        view! {
+                                                        <button class="text-xs text-brand" on:click=move |_| open_edit(c1)>"编辑"</button>
+                                                        <button class="text-xs text-danger inline-flex" on:click=move |_| on_delete(c2.id.clone())>
                                                             <Trash2 size=12 />
                                                         </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </For>
+                                                        }}
                                     </tbody>
                                 </table>
-                                <Show when=move || rows.is_empty()>
+                                <Show when=move || rows_empty.is_empty()>
                                     <div class="empty-state">
                                         <p class="empty-state-desc">"尚无客户/供应商,点击「新增」开始。"</p>
                                     </div>
                                 </Show>
                             </div>
                             <div class="border-t border-border-light">
-                                <Pagination total=rows.len() as i32 current=1 page_size=20 />
+                                <Pagination total=rows_len current=1 page_size=20 />
                             </div>
                         </div>
                     }

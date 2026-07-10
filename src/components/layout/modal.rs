@@ -10,7 +10,7 @@ pub fn Modal(
     open: ReadSignal<bool>,
     title: &'static str,
     #[prop(default = None)] size: Option<&'static str>,
-    on_close: std::sync::Arc<dyn Fn() + Clone + Send + Sync + 'static>,
+    on_close: Callback<()>,
     children: ChildrenFn,
 ) -> impl IntoView {
     let size_class = match size {
@@ -18,25 +18,16 @@ pub fn Modal(
         Some("lg") => "modal modal-lg",
         _ => "modal",
     };
-    let close = on_close.clone();
-    let close_overlay = close.clone();
-    let close_btn = close.clone();
     view! {
         <Show when=move || open.get()>
-            <div class="modal-overlay" on:click=move |_| {
-                let f = close_overlay.clone();
-                f()
-            }>
+            <div class="modal-overlay" on:click=move |_| on_close.run(())>
                 <div class=size_class on:click=move |ev| ev.stop_propagation()>
                     <div class="modal-header">
                         <span class="modal-title">{title}</span>
                         <button
                             class="modal-close"
                             type="button"
-                            on:click=move |_| {
-                                let f = close_btn.clone();
-                                f()
-                            }
+                            on:click=move |_| on_close.run(())
                             aria-label="关闭"
                         >
                             <X size=16 />

@@ -49,7 +49,7 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
 
     let (error, set_error) = signal(Option::<String>::None);
 
-    let do_audit = move |id: String, comment: Option<String>| {
+    let do_audit = move |(id, comment): (String, Option<String>)| {
         leptos::task::spawn_local(async move {
             match ipc::audit_voucher(id, comment).await {
                 Ok(_) => {
@@ -91,11 +91,11 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
         },
     ];
 
-    let on_search = move || {
+    let on_search = move |_| {
         set_page.set(1);
         vouchers.refetch();
     };
-    let on_reset = move || {
+    let on_reset = move |_| {
         set_filter.set(VoucherFilter {
             status: if audit_mode {
                 Some("unaudited".to_string())
@@ -115,8 +115,8 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
         <div class="page-content">
             <SearchForm
                 fields=search_fields()
-                on_search=std::rc::Rc::new(on_search)
-                on_reset=std::rc::Rc::new(on_reset)
+                    on_search=Callback::new(on_search)
+                    on_reset=Callback::new(on_reset)
                 expandable=true
             />
 
@@ -158,8 +158,8 @@ pub fn VoucherManagement(#[prop(default = false)] audit_mode: bool) -> impl Into
                 </div>
                 <VoucherDetail
                     detail=detail
-                    on_audit=std::sync::Arc::new(do_audit)
-                    on_delete=std::sync::Arc::new(do_delete)
+                    on_audit=Callback::new(do_audit)
+                    on_delete=Callback::new(do_delete)
                 />
             </div>
         </div>
@@ -418,8 +418,8 @@ fn RowItem(
 #[component]
 fn VoucherDetail(
     detail: LocalResource<Option<crate::ipc::VoucherDetail>>,
-    on_audit: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync>,
-    on_delete: std::sync::Arc<dyn Fn(String) + Send + Sync>,
+    on_audit: Callback<(String, Option<String>)>,
+    on_delete: Callback<String>,
 ) -> impl IntoView {
     let (audit_comment, set_audit_comment) = signal(String::new());
     view! {
@@ -433,22 +433,17 @@ fn VoucherDetail(
             </div>
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"请选择一条凭证查看详情"</div> }>
                 {let detail = detail.clone();
-                 let on_audit = on_audit.clone();
-                 let on_delete = on_delete.clone();
                  move || {
                     let detail = detail.clone();
-                    let on_audit = on_audit.clone();
-                    let on_delete = on_delete.clone();
                     match detail.map(|d| d.clone()) {
                         Some(Some(d)) => {
                             let voucher = d.voucher;
                             let vid = voucher.id.clone();
-                            let vid2 = vid.clone();
+                            let vid_for_delete = vid.clone();
+                            let vid_for_audit = vid.clone();
                             let status = voucher.status.clone();
                             let logs = d.audit_logs;
                             let entries = d.entries;
-                            let on_audit = on_audit.clone();
-                            let on_delete = on_delete.clone();
                             let logs_clone = logs.clone();
                             view! {
                             <>
@@ -499,7 +494,7 @@ fn VoucherDetail(
                                 <div class="modal-form-actions mt-2">
                                     <button
                                         class="btn btn-outline"
-                                        on:click=move |_| on_delete(vid.clone())
+                                        on:click=move |_| on_delete.run(vid_for_delete.clone())
                                     >
                                         <Trash2 size=12 />
                                         "删除"
@@ -508,7 +503,7 @@ fn VoucherDetail(
                                         class="btn btn-primary"
                                         on:click=move |_| {
                                             let c = audit_comment.get();
-                                            on_audit(vid2.clone(), if c.is_empty() { None } else { Some(c) })
+                                            on_audit.run((vid_for_audit.clone(), if c.is_empty() { None } else { Some(c) }))
                                         }
                                     >
                                         <Check size=12 />
