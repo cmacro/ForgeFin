@@ -266,17 +266,15 @@ pub async fn invoke<T: serde::de::DeserializeOwned>(
     cmd: &str,
     args: &impl Serialize,
 ) -> Result<T, String> {
-    let args_val = serde_wasm_bindgen::to_value(args).map_err(|e| e.to_string())?;
+    let json_str = serde_json::to_string(args).map_err(|e| e.to_string())?;
+    let args_val = js_sys::JSON::parse(&json_str)
+        .map_err(|e| format!("JSON 解析失败: {e:?}"))?;
     let res = tauri_invoke(cmd.to_string(), args_val).await?;
     serde_wasm_bindgen::from_value(res).map_err(|e| e.to_string())
 }
 
 pub async fn login(username: String, password: String) -> Result<AuthResult, String> {
-    invoke(
-        "login_cmd",
-        &[("username", &username), ("password", &password)],
-    )
-    .await
+    invoke("login_cmd", &serde_json::json!({"username": username, "password": password})).await
 }
 
 pub async fn logout() -> Result<(), String> {
@@ -288,7 +286,7 @@ pub async fn current_user() -> Result<CurrentUser, String> {
 }
 
 pub async fn set_current_company(company_id: String) -> Result<(), String> {
-    invoke("set_current_company_cmd", &[("company_id", &company_id)]).await
+    invoke("set_current_company_cmd", &serde_json::json!({"company_id": company_id})).await
 }
 
 pub async fn list_companies() -> Result<Vec<Company>, String> {
@@ -308,7 +306,7 @@ pub async fn update_company(id: String, input: &CompanyInput) -> Result<Company,
 }
 
 pub async fn delete_company(id: String) -> Result<(), String> {
-    invoke("delete_company_cmd", &[("id", &id)]).await
+    invoke("delete_company_cmd", &serde_json::json!({"id": id})).await
 }
 
 pub async fn list_accounts() -> Result<Vec<Account>, String> {
@@ -328,11 +326,11 @@ pub async fn update_account(id: String, input: &AccountInput) -> Result<Account,
 }
 
 pub async fn delete_account(id: String) -> Result<(), String> {
-    invoke("delete_account_cmd", &[("id", &id)]).await
+    invoke("delete_account_cmd", &serde_json::json!({"id": id})).await
 }
 
 pub async fn list_contacts(contact_type: Option<String>) -> Result<Vec<Contact>, String> {
-    invoke("list_contacts_cmd", &[("contact_type", &contact_type)]).await
+    invoke("list_contacts_cmd", &serde_json::json!({"contact_type": contact_type})).await
 }
 
 pub async fn create_contact(input: &ContactInput) -> Result<Contact, String> {
@@ -348,23 +346,23 @@ pub async fn update_contact(id: String, input: &ContactInput) -> Result<Contact,
 }
 
 pub async fn delete_contact(id: String) -> Result<(), String> {
-    invoke("delete_contact_cmd", &[("id", &id)]).await
+    invoke("delete_contact_cmd", &serde_json::json!({"id": id})).await
 }
 
 pub async fn create_voucher(input: &VoucherInput) -> Result<Voucher, String> {
-    invoke("create_voucher_cmd", &[("input", input)]).await
+    invoke("create_voucher_cmd", &serde_json::json!({"input": input})).await
 }
 
 pub async fn list_vouchers(filter: &VoucherFilter) -> Result<VoucherPage, String> {
-    invoke("list_vouchers_cmd", &[("filter", filter)]).await
+    invoke("list_vouchers_cmd", &serde_json::json!({"filter": filter})).await
 }
 
 pub async fn get_voucher(id: String) -> Result<VoucherDetail, String> {
-    invoke("get_voucher_cmd", &[("id", &id)]).await
+    invoke("get_voucher_cmd", &serde_json::json!({"id": id})).await
 }
 
 pub async fn delete_voucher(id: String) -> Result<(), String> {
-    invoke("delete_voucher_cmd", &[("id", &id)]).await
+    invoke("delete_voucher_cmd", &serde_json::json!({"id": id})).await
 }
 
 pub async fn audit_voucher(id: String, comment: Option<String>) -> Result<Voucher, String> {
@@ -378,16 +376,13 @@ pub async fn audit_voucher(id: String, comment: Option<String>) -> Result<Vouche
 pub async fn next_voucher_no(voucher_type: String, voucher_date: String) -> Result<String, String> {
     invoke(
         "next_voucher_no_cmd",
-        &[
-            ("voucher_type", &voucher_type),
-            ("voucher_date", &voucher_date),
-        ],
+        &serde_json::json!({"voucher_type": voucher_type, "voucher_date": voucher_date}),
     )
     .await
 }
 
 pub async fn backup_company(company_id: String) -> Result<String, String> {
-    invoke("backup_company_cmd", &[("company_id", &company_id)]).await
+    invoke("backup_company_cmd", &serde_json::json!({"company_id": company_id})).await
 }
 
 pub async fn backup_system() -> Result<String, String> {
