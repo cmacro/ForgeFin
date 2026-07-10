@@ -94,6 +94,7 @@ Follow existing project patterns and Rust/Leptos best practices.
 - Financial calculations must use precise decimal types
 - Components should be as pure as possible with minimal side effects
 - **No ORM** — use `rusqlite` directly with raw SQL. Keep the data layer simple and explicit
+- **Tauri 2 command args use camelCase** — `#[tauri::command]` auto-converts Rust snake_case params to camelCase JSON keys. Frontend `invoke` calls must use camelCase keys (e.g. `companyId` not `company_id`)
 
 **Avoid:**
 - Large-scale refactoring unless explicitly requested

@@ -272,7 +272,11 @@ pub async fn invoke<T: serde::de::DeserializeOwned>(
 }
 
 pub async fn login(username: String, password: String) -> Result<AuthResult, String> {
-    invoke("login_cmd", &serde_json::json!({"username": username, "password": password})).await
+    invoke(
+        "login_cmd",
+        &serde_json::json!({"username": username, "password": password}),
+    )
+    .await
 }
 
 pub async fn logout() -> Result<(), String> {
@@ -284,7 +288,11 @@ pub async fn current_user() -> Result<CurrentUser, String> {
 }
 
 pub async fn set_current_company(company_id: String) -> Result<(), String> {
-    invoke("set_current_company_cmd", &serde_json::json!({"company_id": company_id})).await
+    invoke(
+        "set_current_company_cmd",
+        &serde_json::json!({"companyId": company_id}),
+    )
+    .await
 }
 
 pub async fn list_companies() -> Result<Vec<Company>, String> {
@@ -328,7 +336,11 @@ pub async fn delete_account(id: String) -> Result<(), String> {
 }
 
 pub async fn list_contacts(contact_type: Option<String>) -> Result<Vec<Contact>, String> {
-    invoke("list_contacts_cmd", &serde_json::json!({"contact_type": contact_type})).await
+    invoke(
+        "list_contacts_cmd",
+        &serde_json::json!({"contact_type": contact_type}),
+    )
+    .await
 }
 
 pub async fn create_contact(input: &ContactInput) -> Result<Contact, String> {
@@ -380,7 +392,11 @@ pub async fn next_voucher_no(voucher_type: String, voucher_date: String) -> Resu
 }
 
 pub async fn backup_company(company_id: String) -> Result<String, String> {
-    invoke("backup_company_cmd", &serde_json::json!({"company_id": company_id})).await
+    invoke(
+        "backup_company_cmd",
+        &serde_json::json!({"company_id": company_id}),
+    )
+    .await
 }
 
 pub async fn backup_system() -> Result<String, String> {

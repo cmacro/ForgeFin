@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod company_selection;
 pub mod contacts;
 pub mod dashboard;
 pub mod general_ledger;

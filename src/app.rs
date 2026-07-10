@@ -4,6 +4,7 @@ use crate::auth::Session;
 use crate::components::layout::shell::AppShell;
 use crate::nav::{NavKey, NavState};
 use crate::pages::accounts::Accounts;
+use crate::pages::company_selection::CompanySelection;
 use crate::pages::contacts::Contacts;
 use crate::pages::dashboard::Dashboard;
 use crate::pages::general_ledger::GeneralLedger;
@@ -56,11 +57,11 @@ fn LoadingScreen() -> impl IntoView {
 fn MainShell() -> impl IntoView {
     let nav = NavState::new();
     let active = nav.active;
-    let has_company = Session::has_company();
+    let company_id = Session::company_id();
 
     let children = move || {
-        if !has_company {
-            return view! { <NoCompany /> }.into_any();
+        if company_id.get().is_none() {
+            return view! { <CompanySelection /> }.into_any();
         }
         let key = active.get();
         view! {
@@ -95,17 +96,5 @@ fn MainShell() -> impl IntoView {
         <AppShell nav=nav.clone()>
             {children}
         </AppShell>
-    }
-}
-
-#[component]
-fn NoCompany() -> impl IntoView {
-    view! {
-        <div class="empty-state">
-            <h2 class="empty-state-title">"尚未选择账套"</h2>
-            <p class="empty-state-desc">
-                "请在顶栏选择一个账套,或前往系统设置创建新账套。所有业务数据按账套隔离。"
-            </p>
-        </div>
     }
 }
