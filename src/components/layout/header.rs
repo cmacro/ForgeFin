@@ -2,7 +2,6 @@ use leptos::prelude::*;
 use lucide_leptos::{CircleQuestionMark, Keyboard, LogOut, Menu, MessageSquare};
 
 use crate::auth::Session;
-use crate::components::layout::company_switcher::CompanySwitcher;
 use crate::nav::NavState;
 
 #[component]
@@ -10,6 +9,17 @@ pub fn Header(nav: NavState) -> impl IntoView {
     let title = move || nav.active.get().title();
     let subtitle = move || nav.active.get().subtitle();
     let user = Session::user();
+    let company_id = Session::company_id();
+    let available = Session::available_companies();
+    let company_name = move || {
+        let cid = company_id.get();
+        available
+            .get()
+            .iter()
+            .find(|c| Some(c.id.clone()) == cid)
+            .map(|c| c.name.clone())
+            .unwrap_or_default()
+    };
     let display_name = move || {
         user.get()
             .map(|u| u.display_name)
@@ -37,7 +47,6 @@ pub fn Header(nav: NavState) -> impl IntoView {
                         <div class="page-subtitle">{subtitle}</div>
                     </Show>
                 </div>
-                <CompanySwitcher />
             </div>
             <div class="app-header-right">
                 <span class="header-action" title="快捷键" aria-label="快捷键">
@@ -49,6 +58,9 @@ pub fn Header(nav: NavState) -> impl IntoView {
                 <span class="header-action" title="消息" aria-label="消息">
                     <MessageSquare size=18 />
                 </span>
+                <Show when=move || !company_name().is_empty()>
+                    <div class="text-13 text-tertiary px-2">{company_name}</div>
+                </Show>
                 <div class="w-px h-6 bg-border"></div>
                 <div class="user-profile">
                     <span class="header-avatar">

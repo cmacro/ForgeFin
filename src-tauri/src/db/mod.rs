@@ -136,10 +136,30 @@ impl DbState {
             guard.clear();
         }
     }
+
+    /// 关闭所有连接并 checkpoint WAL。
+    pub fn close_all(&self) {
+        if let Ok(mut guard) = self.companies.lock() {
+            for (_, conn) in guard.drain() {
+                let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
+        }
+        if let Ok(mut guard) = self.system.lock() {
+            if let Some(conn) = guard.take() {
+                let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
+        }
+    }
 }
 
 impl Default for DbState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for DbState {
+    fn drop(&mut self) {
+        self.close_all();
     }
 }

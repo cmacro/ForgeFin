@@ -20,6 +20,7 @@ pub enum NavKey {
     CashierManagement,
     BudgetManagement,
     TaxManagement,
+    CompanyManagement,
     SystemSettings,
 }
 
@@ -170,6 +171,13 @@ pub fn nav_tree() -> Vec<NavItem> {
             children: None,
         },
         NavItem {
+            key: NavKey::CompanyManagement,
+            label: "账套管理",
+            icon: "building",
+            route: "/company",
+            children: None,
+        },
+        NavItem {
             key: NavKey::SystemSettings,
             label: "系统设置",
             icon: "settings",
@@ -246,6 +254,7 @@ impl NavKey {
             NavKey::CashierManagement => "出纳管理",
             NavKey::BudgetManagement => "预算管理",
             NavKey::TaxManagement => "税务管理",
+            NavKey::CompanyManagement => "账套管理",
             NavKey::SystemSettings => "系统设置",
         }
     }
