@@ -10,7 +10,7 @@ use crate::ipc::{self, Contact, ContactInput};
 /// 默认列出全部;支持按类型过滤。CRUD 通过模态框。
 #[component]
 pub fn Contacts() -> impl IntoView {
-    let contacts = Resource::new(|| (), move |_| async { ipc::list_contacts(None).await });
+    let contacts = LocalResource::new(move || async { ipc::list_contacts(None).await });
     let (filter_type, set_filter_type) = signal(Option::<String>::None);
     let (keyword, set_keyword) = signal(String::new());
     let (edit_open, set_edit_open) = signal(false);
@@ -160,7 +160,7 @@ pub fn Contacts() -> impl IntoView {
             open=edit_open
             editing=editing
             set_open=set_edit_open
-            on_saved=move || refresh()
+            on_saved=Callback::new(move |_| refresh())
         />
     }
 }
@@ -178,7 +178,7 @@ fn ContactEditModal(
     open: ReadSignal<bool>,
     editing: ReadSignal<Option<Contact>>,
     set_open: WriteSignal<bool>,
-    on_saved: impl Fn() + Clone + Send + Sync + 'static,
+    on_saved: Callback<()>,
 ) -> impl IntoView {
     let (code, set_code) = signal(String::new());
     let (name, set_name) = signal(String::new());
@@ -222,9 +222,8 @@ fn ContactEditModal(
         }
     });
 
-    let close = move || set_open.set(false);
+    let close = move |_| set_open.set(false);
 
-    let saved = on_saved.clone();
     let on_submit = move || {
         let editing_id = editing.get().map(|c| c.id);
         let input = ContactInput {
@@ -252,7 +251,7 @@ fn ContactEditModal(
             match res {
                 Ok(_) => {
                     set_open.set(false);
-                    saved();
+                    on_saved.run(());
                 }
                 Err(e) => set_error.set(Some(e)),
             }
@@ -260,7 +259,7 @@ fn ContactEditModal(
     };
 
     view! {
-        <Modal open=open title="客户/供应商" size=Some("lg") on_close=close>
+        <Modal open=open title="客户/供应商" size=Some("lg") on_close=Callback::new(close)>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">
@@ -368,7 +367,7 @@ fn ContactEditModal(
                 </Show>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" type="button" on:click=move |_| close()>"取消"</button>
+                <button class="btn btn-outline" type="button" on:click=move |_| close(())>"取消"</button>
                 <button class="btn btn-primary" type="button" disabled=saving on:click=move |_| on_submit()>
                     {move || if saving.get() { "保存中…" } else { "保存" }}
                 </button>
