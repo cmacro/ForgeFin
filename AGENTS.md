@@ -132,3 +132,51 @@ A task is considered complete only when **all** of the following are satisfied:
 - No new warnings introduced (where reasonably avoidable)
 
 If any item above fails, the task is **not complete**.
+
+---
+
+## Data Desensitization Rules
+
+When processing raw data files in `docs/raw/`, always apply desensitization rules to protect sensitive information. Desensitization mapping is stored in:
+
+```
+docs/raw/脱敏映射表.tsv
+```
+
+**IMPORTANT**: This file is for internal development only and must never be committed to public repositories or shared externally.
+
+### Desensitization Rules
+
+| Data Type | Rule | Example |
+|-----------|------|---------|
+| Person names | Replace with "客户A/B/C" or "员工A/B/C" | 张三 → 客户A |
+| Company names | Replace with "XX公司" or "供应商A/B/C" | 上海XX公司 → 供应商A |
+| Bank account numbers | Keep first 4 and last 4 digits | 6226220219453718 → 6226****3718 |
+| Mobile numbers | Keep first 3 and last 4 digits | 13812345678 → 138****5678 |
+| ID numbers | Keep first 6 and last 4 digits | 310101199001011234 → 310101****1234 |
+| Addresses | Keep province/city, replace street details | 上海市徐汇区XX路123号 → 上海市XX路*号 |
+| Merchant IDs | Replace with "商户编号A/B" | 100172984575 → 商户编号A |
+
+### Enterprise-Specific Rules
+
+**健康管理公司A (yuemy):**
+- Replace "悦己健康" / "上海月满悦健康管理有限公司" → "健康管理公司A"
+- Replace customer names → "客户A/B/C..."
+- Replace employee names → "员工A/B..."
+- Replace suppliers → "供应商A/B/C..."
+
+**项目型企业A (zhentai):**
+- Replace "正泰" → "项目型企业A"
+- Replace location names → "地点A/B/C..." (杭州→地点F, 上海→地点G, etc.)
+- Replace project names → Remove company prefix, keep project type
+
+### Workflow
+
+1. Before creating any analysis or documentation from raw data, consult `docs/raw/脱敏映射表.tsv`
+2. Apply mapping rules to all personal names, company names, addresses, and account numbers
+3. Verify all desensitized content is consistent across the document
+4. Never output original sensitive data in analysis files
+
+### File Location
+
+All desensitization mapping files MUST be stored in `docs/raw/` directory, which is excluded from version control (see `.gitignore`) to prevent accidental exposure of sensitive data.
