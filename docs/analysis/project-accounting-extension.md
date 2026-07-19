@@ -30,8 +30,8 @@
 ## 2. 核心原则
 
 1. **账套结构不动**：会计科目表、凭证表、凭证分录表保持原样。
-2. **原始凭证层不动**：`source_types`、`source_fields`、`source_records`、`attachments`、`audit_logs` 继续承担通用原始数据归档职责。
-3. **新增业务维度层**：在原始记录之上，增加“项目”“合同”“阶段”等业务对象表，用于横向归集。
+2. **原始凭证层不动**：`source_types`、`source_fields`、`source_records`、`attachments`、`audit_logs` 继续承担通用原始凭证归档职责。
+3. **新增业务维度层**：在原始记录之上，增加"项目""合同""阶段"等业务对象表，用于横向归集。
 4. **凭证生成链路不变**：最终仍通过 `source_records` → `vouchers`，只是 `source_records` 可以关联更丰富的业务上下文。
 5. **可插拔**：没有项目需求的企业，完全不需要启用这些表和页面。
 
@@ -70,15 +70,15 @@ source_types / source_fields / source_records（通用动态原始凭证层）
 CREATE TABLE projects (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
-    project_no TEXT NOT NULL,          -- 项目编号
-    project_name TEXT NOT NULL,        -- 项目名称
-    project_type TEXT,                 -- 项目类型：工程 / 咨询 / 研发 / 其他
-    customer_id INTEGER,               -- 关联客户
-    manager_id INTEGER,                -- 项目负责人
-    start_date TEXT,                   -- 开始日期
-    end_date TEXT,                     -- 预计结束日期
-    budget_amount DECIMAL(18,4),       -- 项目预算
-    status TEXT DEFAULT 'active',      -- active / paused / completed / cancelled
+    project_no TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    project_type TEXT,
+    customer_id INTEGER,
+    manager_id INTEGER,
+    start_date TEXT,
+    end_date TEXT,
+    budget_amount DECIMAL(18,4),
+    status TEXT DEFAULT 'active',
     created_at TEXT,
     updated_at TEXT
 );
@@ -93,14 +93,14 @@ CREATE TABLE project_phases (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
     project_id INTEGER NOT NULL,
-    phase_no TEXT NOT NULL,            -- 阶段编号
-    phase_name TEXT NOT NULL,          -- 阶段名称
+    phase_no TEXT NOT NULL,
+    phase_name TEXT NOT NULL,
     plan_start TEXT,
     plan_end TEXT,
     actual_start TEXT,
     actual_end TEXT,
     budget_amount DECIMAL(18,4),
-    status TEXT DEFAULT 'pending',     -- pending / in_progress / completed
+    status TEXT DEFAULT 'pending',
     sort_order INTEGER DEFAULT 0,
     created_at TEXT
 );
@@ -114,15 +114,15 @@ CREATE TABLE project_phases (
 CREATE TABLE contracts (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
-    contract_no TEXT NOT NULL,         -- 合同编号
+    contract_no TEXT NOT NULL,
     contract_name TEXT,
-    project_id INTEGER,                  -- 关联项目（可为空）
+    project_id INTEGER,
     customer_id INTEGER,
     supplier_id INTEGER,
     sign_date TEXT,
-    amount DECIMAL(18,4),              -- 合同金额
-    tax_amount DECIMAL(18,4),            -- 税额
-    status TEXT DEFAULT 'active',        -- active / completed / terminated
+    amount DECIMAL(18,4),
+    tax_amount DECIMAL(18,4),
+    status TEXT DEFAULT 'active',
     created_at TEXT
 );
 ```
@@ -137,7 +137,7 @@ CREATE TABLE contract_items (
     company_id INTEGER NOT NULL,
     contract_id INTEGER NOT NULL,
     item_name TEXT NOT NULL,
-    item_type TEXT,                    -- income / cost
+    item_type TEXT,
     amount DECIMAL(18,4),
     plan_date TEXT,
     sort_order INTEGER DEFAULT 0,
@@ -154,19 +154,20 @@ CREATE TABLE project_entries (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
     project_id INTEGER NOT NULL,
-    phase_id INTEGER,                    -- 可关联阶段
-    contract_id INTEGER,                   -- 可关联合同
-    entry_type TEXT NOT NULL,            -- income / cost / expense / refund
+    phase_id INTEGER,
+    contract_id INTEGER,
+    entry_type TEXT NOT NULL,
     entry_date TEXT,
     amount DECIMAL(18,4),
     currency TEXT DEFAULT 'CNY',
-    counterpart_id INTEGER,              -- 客户/供应商 ID
-    counterpart_type TEXT,               -- customer / supplier
-    invoice_id INTEGER,                  -- 关联发票
+    counterpart_id INTEGER,
+    counterpart_type TEXT,
+    invoice_id INTEGER,
     summary TEXT,
-    source_record_id INTEGER,            -- 关联原始记录
-    voucher_id INTEGER,                  -- 关联凭证
-    status TEXT DEFAULT 'pending',       -- pending / reviewed / posted
+    source_record_id INTEGER,
+    voucher_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    fiscal_year INTEGER,
     created_by INTEGER,
     created_at TEXT,
     reviewed_by INTEGER,
@@ -183,16 +184,38 @@ CREATE TABLE invoices (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
     invoice_no TEXT NOT NULL,
-    invoice_type TEXT,                 -- input / output
+    invoice_type TEXT,
     project_id INTEGER,
     contract_id INTEGER,
     counterpart_id INTEGER,
     amount DECIMAL(18,4),
     tax_amount DECIMAL(18,4),
     issue_date TEXT,
-    status TEXT DEFAULT 'unused',      -- unused / used / void
+    status TEXT DEFAULT 'unused',
     source_record_id INTEGER,
     voucher_id INTEGER,
+    created_at TEXT
+);
+```
+
+### 4.7 质保金表 `project_retentions`
+
+独立管理项目质保金，支持跨年跟踪。
+
+```sql
+CREATE TABLE project_retentions (
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    contract_id INTEGER,
+    invoice_id INTEGER,
+    amount DECIMAL(18,4),
+    release_date TEXT,
+    status TEXT DEFAULT 'held',
+    retained_at TEXT,
+    released_at TEXT,
+    voucher_id INTEGER,
+    remark TEXT,
     created_at TEXT
 );
 ```
@@ -203,8 +226,8 @@ CREATE TABLE invoices (
 
 ### 5.1 不替换，只增强
 
-- `source_records` 继续作为“原始凭证归档池”，保存每一笔导入或手工录入的原始数据。
-- `project_entries` 作为“业务维度归集表”，把属于项目的原始记录再做一次业务级汇总。
+- `source_records` 继续作为"原始凭证归档池"，保存每一笔导入或手工录入的原始数据。
+- `project_entries` 作为"业务维度归集表"，把属于项目的原始记录再做一次业务级汇总。
 - 两者通过 `project_entries.source_record_id` 一对多或一对一关联。
 
 ### 5.2 动态字段 + 业务表各司其职
@@ -233,11 +256,9 @@ CREATE TABLE voucher_project_refs (
     phase_id INTEGER,
     contract_id INTEGER,
     amount DECIMAL(18,4),
-    ref_type TEXT                      -- income / cost / fee
+    ref_type TEXT
 );
 ```
-
-这样查项目账时，可以从 `voucher_project_refs` 快速聚合，不需要扫描 JSON。
 
 ---
 
@@ -262,8 +283,6 @@ CREATE TABLE voucher_project_refs (
 ---
 
 ## 7. 前端页面建议
-
-按 ForgeFin 目录规则，新增以下页面和组件：
 
 | 页面 | 路径 | 作用 |
 |------|------|------|
@@ -293,7 +312,7 @@ CREATE TABLE voucher_project_refs (
 CREATE TABLE company_features (
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
-    feature_code TEXT NOT NULL,        -- project / contract / invoice / multi_phase
+    feature_code TEXT NOT NULL,
     enabled INTEGER DEFAULT 0,
     created_at TEXT
 );
@@ -301,6 +320,87 @@ CREATE TABLE company_features (
 
 ---
 
-## 9. 结论
+## 9. 长周期项目处理策略
 
-> 当动态原始凭证模型遇到项目型企业的复杂核算需求时，不应把项目语义硬塞进通用 JSON 字段，而应在保留 `source_records` 通用归档能力的基础上，新增 `projects`、`project_phases`、`contracts`、`project_entries`、`invoices`、`voucher_project_refs` 等业务维度表；原始记录负责“从哪里来”，业务维度表负责“属于哪个项目/合同/阶段”，凭证负责“记到哪一科目”；三者通过外键衔接，既满足项目级核算，又不破坏现有账套结构。
+项目型企业常见项目周期1年以上，甚至3-5年。需要从架构层面解决跨财年持续跟踪问题。
+
+### 9.1 核心挑战
+
+| 挑战 | 说明 |
+|------|------|
+| 跨财年收入确认 | 不同财年需分别确认收入/成本 |
+| 预算占用 | 项目预算需跨年预留 |
+| 质保金账龄 | 质保金可能2年后才到期收回 |
+| 阶段里程碑 | 阶段可能跨越多个财年 |
+| 历史数据查询 | 项目历史收支需长期保存可查 |
+
+### 9.2 项目生命周期状态机
+
+| 状态 | 说明 | 关键动作 |
+|------|------|---------|
+| `draft` | 立项待审批 | 仅项目信息录入，不参与财务核算 |
+| `active` | 执行中 | 正常收支录入，实时更新项目账 |
+| `completed` | 完工待结算 | 停止新增收支，等待结算价确定 |
+| `settled` | 已结算 | 结算价确定，质保金独立核算 |
+| `warranty` | 质保期 | 质保金留置，到期后触发收款提醒 |
+| `archived` | 已归档 | 仅供查询，不再更新 |
+
+### 9.3 跨财年收支归集
+
+`project_entries` 的 `fiscal_year` 字段支持按财年独立核算：
+
+```sql
+ALTER TABLE project_entries ADD COLUMN fiscal_year INTEGER;
+
+SELECT
+    fiscal_year,
+    SUM(CASE WHEN entry_type = 'income' THEN amount ELSE 0 END) as income_amount,
+    SUM(CASE WHEN entry_type = 'cost' THEN amount ELSE 0 END) as cost_amount
+FROM project_entries
+WHERE project_id = ?
+GROUP BY fiscal_year;
+```
+
+### 9.4 质保金跨期管理
+
+独立质保金表支持2年+账龄跟踪：
+
+```sql
+CREATE TABLE project_retentions (
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    contract_id INTEGER,
+    invoice_id INTEGER,
+    amount DECIMAL(18,4),
+    release_date TEXT,
+    status TEXT DEFAULT 'held',
+    voucher_id INTEGER,
+    created_at TEXT
+);
+```
+
+### 9.5 期间结转处理
+
+每财年结束，需对进行中项目做结转：
+
+```sql
+INSERT INTO project_yearly_summary (
+    company_id, project_id, fiscal_year,
+    opening_balance, contract_amount,
+    income_ytd, cost_ytd, closing_balance, created_at
+)
+SELECT
+    company_id, id, 2023,
+    (SELECT closing_balance FROM project_yearly_summary WHERE project_id = projects.id AND fiscal_year = 2022),
+    budget_total, 0, 0, 0, datetime('now')
+FROM projects WHERE status IN ('active', 'completed');
+```
+
+---
+
+## 10. 结论
+
+> 当动态原始凭证模型遇到项目型企业的复杂核算需求时，不应把项目语义硬塞进通用 JSON 字段，而应在保留 `source_records` 通用归档能力的基础上，新增 `projects`、`project_phases`、`contracts`、`project_entries`、`invoices`、`voucher_project_refs` 等业务维度表；原始记录负责"从哪里来"，业务维度表负责"属于哪个项目/合同/阶段"，凭证负责"记到哪一科目"；三者通过外键衔接，既满足项目级核算，又不破坏现有账套结构。
+>
+> 长周期项目需额外处理：状态机管理项目生命周期、fiscal_year 字段支持跨财年归集、独立质保金表管理2年+账龄、财年结转保证期间报表连续性。
