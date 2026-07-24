@@ -20,6 +20,9 @@ pub enum NavKey {
     CashierManagement,
     BudgetManagement,
     TaxManagement,
+    RawData,
+    Reconciliation,
+    AuditLog,
     CompanyManagement,
     SystemSettings,
 }
@@ -171,6 +174,35 @@ pub fn nav_tree() -> Vec<NavItem> {
             children: None,
         },
         NavItem {
+            key: NavKey::RawData,
+            label: "原始凭证",
+            icon: "folder-open",
+            route: "/raw-data",
+            children: Some(vec![
+                NavItem {
+                    key: NavKey::RawData,
+                    label: "导入中心",
+                    icon: "upload",
+                    route: "/raw-data/import",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::Reconciliation,
+                    label: "对账中心",
+                    icon: "check-circle",
+                    route: "/raw-data/reconciliation",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::AuditLog,
+                    label: "审计日志",
+                    icon: "scroll-text",
+                    route: "/raw-data/audit-log",
+                    children: None,
+                },
+            ]),
+        },
+        NavItem {
             key: NavKey::CompanyManagement,
             label: "账套管理",
             icon: "building",
@@ -254,6 +286,9 @@ impl NavKey {
             NavKey::CashierManagement => "出纳管理",
             NavKey::BudgetManagement => "预算管理",
             NavKey::TaxManagement => "税务管理",
+            NavKey::RawData => "原始凭证",
+            NavKey::Reconciliation => "对账中心",
+            NavKey::AuditLog => "审计日志",
             NavKey::CompanyManagement => "账套管理",
             NavKey::SystemSettings => "系统设置",
         }
@@ -274,6 +309,9 @@ impl NavKey {
             NavKey::ReportCenter => "生成各类财务报表",
             NavKey::AccountsReceivable => "管理应收账款及相关业务",
             NavKey::AccountsPayable => "管理应付账款及相关业务",
+            NavKey::RawData => "导入并管理原始凭证文件",
+            NavKey::Reconciliation => "原始凭证自动对账与差异审核",
+            NavKey::AuditLog => "查看原始凭证与对账操作日志",
             NavKey::SystemSettings => "账套、用户与备份管理",
             _ => "",
         }

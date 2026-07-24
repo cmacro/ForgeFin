@@ -5,6 +5,7 @@ pub mod dashboard;
 pub mod general_ledger;
 pub mod login;
 pub mod placeholder;
+pub mod raw_data;
 pub mod settings;
 pub mod voucher;
 pub mod voucher_entry;

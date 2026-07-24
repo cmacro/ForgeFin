@@ -184,8 +184,78 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
 
         CREATE INDEX IF NOT EXISTS idx_audit_voucher
             ON voucher_audit_logs(voucher_id);
+
+        -- 原始凭证相关表
+        CREATE TABLE IF NOT EXISTS source_types (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            code            TEXT NOT NULL UNIQUE,
+            name            TEXT NOT NULL,
+            category        TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS import_batches (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path       TEXT NOT NULL,
+            file_name       TEXT NOT NULL,
+            file_hash       TEXT NOT NULL,
+            source_type     TEXT NOT NULL,
+            row_count       INTEGER NOT NULL DEFAULT 0,
+            imported_at     TEXT NOT NULL,
+            created_by      TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_batches_hash
+            ON import_batches(file_hash);
+        CREATE INDEX IF NOT EXISTS idx_import_batches_name
+            ON import_batches(file_name);
+
+        CREATE TABLE IF NOT EXISTS source_records (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type_id  INTEGER NOT NULL,
+            import_batch_id INTEGER NOT NULL,
+            source_file_name TEXT NOT NULL,
+            source_row_no   INTEGER NOT NULL,
+            record_no       TEXT,
+            record_date     TEXT,
+            amount_total    TEXT,
+            currency        TEXT DEFAULT 'CNY',
+            counterpart_info TEXT,
+            summary         TEXT,
+            raw_data        TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (source_type_id) REFERENCES source_types(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_source_records_batch
+            ON source_records(import_batch_id);
+        CREATE INDEX IF NOT EXISTS idx_source_records_type
+            ON source_records(source_type_id);
+        CREATE INDEX IF NOT EXISTS idx_source_records_date
+            ON source_records(record_date);
         ",
     )
     .map_err(|e| format!("公司库建表失败: {e}"))?;
+
+    // 初始化默认原始凭证来源类型
+    init_source_types(conn)?;
+
+    Ok(())
+}
+
+fn init_source_types(conn: &Connection) -> Result<(), String> {
+    let types = [
+        ("bank_flow", "银行流水", "bank"),
+        ("order_flow", "订单流水", "order"),
+        ("pos_flow", "POS流水", "pos"),
+        ("summary_flow", "数据汇总", "summary"),
+    ];
+    for (code, name, category) in types {
+        conn.execute(
+            "INSERT OR IGNORE INTO source_types (code, name, category) VALUES (?1, ?2, ?3)",
+            rusqlite::params![code, name, category],
+        )
+        .map_err(|e| format!("初始化来源类型失败: {e}"))?;
+    }
     Ok(())
 }

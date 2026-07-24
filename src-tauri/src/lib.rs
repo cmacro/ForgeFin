@@ -50,6 +50,10 @@ pub fn run() {
             voucher::audit_voucher_cmd,
             voucher::list_audit_logs_cmd,
             voucher::next_voucher_no_cmd,
+            // raw data
+            raw::scan_raw_directory_cmd,
+            raw::auto_import_raw_directory_cmd,
+            raw::import_raw_file_cmd,
             // backup
             backup::backup_company_cmd,
             backup::backup_system_cmd,

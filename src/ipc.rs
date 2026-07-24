@@ -222,6 +222,35 @@ pub struct BackupEntry {
 }
 
 // =====================================================================
+// 原始凭证 IPC 类型
+// =====================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RawFileInfo {
+    pub file_path: String,
+    pub file_name: String,
+    pub source_type: String,
+    pub status: String,
+    pub row_count: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImportResult {
+    pub file_name: String,
+    pub batch_id: i64,
+    pub source_type: String,
+    pub row_count: i32,
+    pub file_hash: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ImportDirResult {
+    pub imported: Vec<ImportResult>,
+    pub skipped: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+// =====================================================================
 // invoke 封装。统一错误为 String。
 //
 // 通过 `window.__TAURI__.core.invoke` 调用 Rust 命令(tauri.conf.json
@@ -415,6 +444,30 @@ pub async fn restore_company(
     invoke(
         "restore_company_cmd",
         &serde_json::json!({"company_id": company_id, "backup_path": backup_path, "confirm": confirm}),
+    )
+    .await
+}
+
+pub async fn scan_raw_directory(path: String) -> Result<Vec<RawFileInfo>, String> {
+    invoke("scan_raw_directory_cmd", &serde_json::json!({"path": path})).await
+}
+
+pub async fn auto_import_raw_directory(path: String) -> Result<ImportDirResult, String> {
+    invoke(
+        "auto_import_raw_directory_cmd",
+        &serde_json::json!({"path": path}),
+    )
+    .await
+}
+
+pub async fn import_raw_file(
+    file_path: String,
+    batch_id: Option<String>,
+    source_type: Option<String>,
+) -> Result<ImportResult, String> {
+    invoke(
+        "import_raw_file_cmd",
+        &serde_json::json!({"filePath": file_path, "batchId": batch_id, "sourceType": source_type}),
     )
     .await
 }

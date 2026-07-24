@@ -10,6 +10,7 @@ use crate::pages::dashboard::Dashboard;
 use crate::pages::general_ledger::GeneralLedger;
 use crate::pages::login::Login;
 use crate::pages::placeholder::Placeholder;
+use crate::pages::raw_data::RawData;
 use crate::pages::settings::Settings;
 use crate::pages::voucher::VoucherManagement;
 use crate::pages::voucher_entry::VoucherEntry;
@@ -87,6 +88,9 @@ fn MainShell() -> impl IntoView {
                 NavKey::CashierManagement => view! { <Placeholder title="出纳管理" /> }.into_any(),
                 NavKey::BudgetManagement => view! { <Placeholder title="预算管理" /> }.into_any(),
                 NavKey::TaxManagement => view! { <Placeholder title="税务管理" /> }.into_any(),
+                NavKey::RawData | NavKey::Reconciliation | NavKey::AuditLog => {
+                    view! { <RawData /> }.into_any()
+                }
                 NavKey::SystemSettings => view! { <Settings /> }.into_any(),
                 NavKey::CompanyManagement => view! { <CompanyManagement /> }.into_any(),
             }}
