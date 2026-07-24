@@ -4,6 +4,7 @@ use crate::auth::Session;
 use crate::components::layout::shell::AppShell;
 use crate::nav::{NavKey, NavState};
 use crate::pages::accounts::Accounts;
+use crate::pages::audit_log::AuditLog;
 use crate::pages::company_management::CompanyManagement;
 use crate::pages::contacts::Contacts;
 use crate::pages::dashboard::Dashboard;
@@ -11,6 +12,7 @@ use crate::pages::general_ledger::GeneralLedger;
 use crate::pages::login::Login;
 use crate::pages::placeholder::Placeholder;
 use crate::pages::raw_data::RawData;
+use crate::pages::reconciliation::Reconciliation;
 use crate::pages::settings::Settings;
 use crate::pages::voucher::VoucherManagement;
 use crate::pages::voucher_entry::VoucherEntry;
@@ -58,11 +60,9 @@ fn LoadingScreen() -> impl IntoView {
 fn MainShell() -> impl IntoView {
     let nav = NavState::new();
     let active = nav.active;
-    let has_company = Session::has_company();
-
     let children = move || {
         let key = active.get();
-        if !has_company && key != NavKey::SystemSettings {
+        if !Session::has_company() && key != NavKey::SystemSettings {
             return view! { <NoCompany /> }.into_any();
         }
         let key = active.get();
@@ -88,9 +88,9 @@ fn MainShell() -> impl IntoView {
                 NavKey::CashierManagement => view! { <Placeholder title="出纳管理" /> }.into_any(),
                 NavKey::BudgetManagement => view! { <Placeholder title="预算管理" /> }.into_any(),
                 NavKey::TaxManagement => view! { <Placeholder title="税务管理" /> }.into_any(),
-                NavKey::RawData | NavKey::Reconciliation | NavKey::AuditLog => {
-                    view! { <RawData /> }.into_any()
-                }
+                NavKey::RawData => view! { <RawData /> }.into_any(),
+                NavKey::Reconciliation => view! { <Reconciliation /> }.into_any(),
+                NavKey::AuditLog => view! { <AuditLog /> }.into_any(),
                 NavKey::SystemSettings => view! { <Settings /> }.into_any(),
                 NavKey::CompanyManagement => view! { <CompanyManagement /> }.into_any(),
             }}

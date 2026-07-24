@@ -233,6 +233,80 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             ON source_records(source_type_id);
         CREATE INDEX IF NOT EXISTS idx_source_records_date
             ON source_records(record_date);
+
+        -- 原始凭证对账汇总(按日期)
+        CREATE TABLE IF NOT EXISTS transaction_summaries (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            summary_date    TEXT NOT NULL,
+            source_type     TEXT NOT NULL,
+            bank_amount     TEXT NOT NULL DEFAULT '0',
+            order_amount    TEXT NOT NULL DEFAULT '0',
+            diff_amount     TEXT NOT NULL DEFAULT '0',
+            review_status   TEXT NOT NULL DEFAULT 'pending',
+            voucher_id      TEXT,
+            matched_bank_ids TEXT,
+            matched_order_ids TEXT,
+            comment         TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_transaction_summaries_date
+            ON transaction_summaries(summary_date);
+        CREATE INDEX IF NOT EXISTS idx_transaction_summaries_status
+            ON transaction_summaries(review_status);
+
+        -- 审计日志(原始凭证/对账/凭证生成)
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type     TEXT NOT NULL,
+            entity_id       TEXT,
+            action          TEXT NOT NULL,
+            old_values      TEXT,
+            new_values      TEXT,
+            operator_id     TEXT,
+            operator_name   TEXT,
+            comment         TEXT,
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_entity
+            ON audit_logs(entity_type, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_action
+            ON audit_logs(action);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_created
+            ON audit_logs(created_at);
+
+        -- 附件
+        CREATE TABLE IF NOT EXISTS attachments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type     TEXT NOT NULL,
+            entity_id       TEXT NOT NULL,
+            file_name       TEXT NOT NULL,
+            file_path       TEXT,
+            file_size       INTEGER DEFAULT 0,
+            mime_type       TEXT,
+            created_by      TEXT,
+            created_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_attachments_entity
+            ON attachments(entity_type, entity_id);
+
+        -- 导入错误明细
+        CREATE TABLE IF NOT EXISTS import_errors (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_batch_id INTEGER NOT NULL,
+            source_row_no   INTEGER,
+            field_name      TEXT,
+            field_value     TEXT,
+            error_message   TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (import_batch_id) REFERENCES import_batches(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_errors_batch
+            ON import_errors(import_batch_id);
         ",
     )
     .map_err(|e| format!("公司库建表失败: {e}"))?;

@@ -125,6 +125,35 @@ pub fn nav_tree() -> Vec<NavItem> {
             ]),
         },
         NavItem {
+            key: NavKey::RawData,
+            label: "原始凭证",
+            icon: "folder-open",
+            route: "/raw-data",
+            children: Some(vec![
+                NavItem {
+                    key: NavKey::RawData,
+                    label: "导入中心",
+                    icon: "upload",
+                    route: "/raw-data/import",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::Reconciliation,
+                    label: "对账中心",
+                    icon: "check-circle",
+                    route: "/raw-data/reconciliation",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::AuditLog,
+                    label: "审计日志",
+                    icon: "scroll-text",
+                    route: "/raw-data/audit-log",
+                    children: None,
+                },
+            ]),
+        },
+        NavItem {
             key: NavKey::ReportCenter,
             label: "报表中心",
             icon: "report",
@@ -172,35 +201,6 @@ pub fn nav_tree() -> Vec<NavItem> {
             icon: "receipt",
             route: "/tax",
             children: None,
-        },
-        NavItem {
-            key: NavKey::RawData,
-            label: "原始凭证",
-            icon: "folder-open",
-            route: "/raw-data",
-            children: Some(vec![
-                NavItem {
-                    key: NavKey::RawData,
-                    label: "导入中心",
-                    icon: "upload",
-                    route: "/raw-data/import",
-                    children: None,
-                },
-                NavItem {
-                    key: NavKey::Reconciliation,
-                    label: "对账中心",
-                    icon: "check-circle",
-                    route: "/raw-data/reconciliation",
-                    children: None,
-                },
-                NavItem {
-                    key: NavKey::AuditLog,
-                    label: "审计日志",
-                    icon: "scroll-text",
-                    route: "/raw-data/audit-log",
-                    children: None,
-                },
-            ]),
         },
         NavItem {
             key: NavKey::CompanyManagement,

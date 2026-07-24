@@ -471,3 +471,159 @@ pub async fn import_raw_file(
     )
     .await
 }
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct RawRecordFilter {
+    pub source_type: Option<String>,
+    pub batch_id: Option<i64>,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RawRecord {
+    pub id: i64,
+    pub source_type: String,
+    pub source_type_name: String,
+    pub import_batch_id: i64,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub record_no: Option<String>,
+    pub record_date: Option<String>,
+    pub amount_total: Option<String>,
+    pub currency: String,
+    pub counterpart_info: Option<String>,
+    pub summary: Option<String>,
+    pub status: String,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AttachmentInfo {
+    pub id: i64,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub file_name: String,
+    pub file_size: i64,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AuditLogEntry {
+    pub id: i64,
+    pub entity_type: String,
+    pub entity_id: Option<String>,
+    pub action: String,
+    pub operator_name: Option<String>,
+    pub comment: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RawRecordPage {
+    pub items: Vec<RawRecord>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RawRecordDetail {
+    pub record: RawRecord,
+    pub raw_data: String,
+    pub attachments: Vec<AttachmentInfo>,
+    pub audit_logs: Vec<AuditLogEntry>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReconcileResult {
+    pub matched_dates: Vec<String>,
+    pub diff_dates: Vec<String>,
+    pub created_summary_ids: Vec<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReconciliationItem {
+    pub id: i64,
+    pub summary_date: String,
+    pub source_type: String,
+    pub bank_amount: String,
+    pub order_amount: String,
+    pub diff_amount: String,
+    pub review_status: String,
+    pub voucher_id: Option<String>,
+    pub voucher_no: Option<String>,
+    pub comment: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReconciliationPage {
+    pub items: Vec<ReconciliationItem>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VoucherSummary {
+    pub id: String,
+    pub voucher_no: String,
+    pub voucher_date: String,
+    pub summary: String,
+    pub debit_total: String,
+    pub credit_total: String,
+}
+
+pub async fn list_raw_records(filter: &RawRecordFilter) -> Result<RawRecordPage, String> {
+    invoke(
+        "list_raw_records_cmd",
+        &serde_json::json!({"filter": filter}),
+    )
+    .await
+}
+
+pub async fn get_raw_record(id: i64) -> Result<Option<RawRecordDetail>, String> {
+    invoke("get_raw_record_cmd", &serde_json::json!({"id": id})).await
+}
+
+pub async fn reconcile(date: String) -> Result<ReconcileResult, String> {
+    invoke("reconcile_cmd", &serde_json::json!({"date": date})).await
+}
+
+pub async fn list_reconciliation_items(
+    date: Option<String>,
+    status: Option<String>,
+    page: i32,
+    page_size: i32,
+) -> Result<ReconciliationPage, String> {
+    invoke(
+        "list_reconciliation_items_cmd",
+        &serde_json::json!({"date": date, "status": status, "page": page, "pageSize": page_size}),
+    )
+    .await
+}
+
+pub async fn review_summary(
+    summary_id: i64,
+    approve: bool,
+    comment: Option<String>,
+) -> Result<Option<VoucherSummary>, String> {
+    invoke(
+        "review_summary_cmd",
+        &serde_json::json!({"summaryId": summary_id, "approve": approve, "comment": comment}),
+    )
+    .await
+}
+
+pub async fn list_audit_logs(
+    entity_type: Option<String>,
+    entity_id: Option<String>,
+    page: i32,
+    page_size: i32,
+) -> Result<(Vec<AuditLogEntry>, i32), String> {
+    invoke(
+        "list_raw_audit_logs_cmd",
+        &serde_json::json!({"entityType": entity_type, "entityId": entity_id, "page": page, "pageSize": page_size}),
+    )
+    .await
+}

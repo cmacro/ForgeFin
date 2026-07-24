@@ -54,6 +54,12 @@ pub fn run() {
             raw::scan_raw_directory_cmd,
             raw::auto_import_raw_directory_cmd,
             raw::import_raw_file_cmd,
+            raw::list_raw_records_cmd,
+            raw::get_raw_record_cmd,
+            raw::reconcile_cmd,
+            raw::list_reconciliation_items_cmd,
+            raw::review_summary_cmd,
+            raw::list_raw_audit_logs_cmd,
             // backup
             backup::backup_company_cmd,
             backup::backup_system_cmd,

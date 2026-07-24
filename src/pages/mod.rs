@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod audit_log;
 pub mod company_management;
 pub mod contacts;
 pub mod dashboard;
@@ -6,6 +7,7 @@ pub mod general_ledger;
 pub mod login;
 pub mod placeholder;
 pub mod raw_data;
+pub mod reconciliation;
 pub mod settings;
 pub mod voucher;
 pub mod voucher_entry;
