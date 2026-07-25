@@ -1,14 +1,11 @@
 use leptos::prelude::*;
-use lucide_leptos::{FileText, RefreshCw};
+use lucide_leptos::{FileText, FolderOpen, ListFilter, RefreshCw};
 
-use crate::components::charts::kpi_card::{KpiAccent, KpiCard};
-use crate::components::form::search_form::{FieldKind, SearchField, SearchForm, SelectOption};
+use crate::components::form::search_form::{FieldKind, SearchField, SelectOption};
 use crate::components::layout::tabs::{TabItem, Tabs};
-use crate::components::source::import_uploader::ImportUploader;
-use crate::components::source::raw_record_table::RawRecordTable;
-use crate::components::source::record_detail::RecordDetail;
-use crate::components::table::pagination::Pagination;
-use crate::ipc::{self, ImportResult, RawRecordFilter};
+use crate::components::source::import_file_detail::ImportFileDetail;
+use crate::components::source::import_file_list::ImportFileList;
+use crate::ipc::{self, ImportBatch, ImportResult};
 
 /// 原始数据页。
 ///
@@ -17,7 +14,8 @@ use crate::ipc::{self, ImportResult, RawRecordFilter};
 pub fn RawData() -> impl IntoView {
     let (active_tab, set_active_tab) = signal("import");
 
-    let (path, set_path) = signal(String::from(""));
+    let stored_dir = ipc::get_stored_import_dir().unwrap_or_default();
+    let (path, set_path) = signal(stored_dir);
     let (files, set_files) = signal(Vec::<ipc::RawFileInfo>::new());
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(Option::<String>::None);
@@ -44,6 +42,23 @@ pub fn RawData() -> impl IntoView {
                 Err(e) => set_error.set(Some(format!("扫描失败: {e}"))),
             }
             set_loading.set(false);
+        });
+    };
+
+    let select_dir = move |_: ()| {
+        leptos::task::spawn_local(async move {
+            set_loading.set(true);
+            match ipc::select_raw_directory().await {
+                Ok(p) => {
+                    ipc::set_stored_import_dir(&p);
+                    set_path.set(p);
+                    set_loading.set(false);
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("选择目录失败: {e}")));
+                    set_loading.set(false);
+                }
+            }
         });
     };
 
@@ -100,6 +115,7 @@ pub fn RawData() -> impl IntoView {
                 import_result=import_result
                 scan=Callback::new(scan)
                 auto_import=Callback::new(auto_import)
+                select_dir=Callback::new(select_dir)
             />
         </Show>
 
@@ -119,6 +135,7 @@ fn ImportCenter(
     import_result: ReadSignal<Option<ipc::ImportDirResult>>,
     scan: Callback<()>,
     auto_import: Callback<()>,
+    select_dir: Callback<()>,
 ) -> impl IntoView {
     view! {
         <div class="page-content">
@@ -138,6 +155,13 @@ fn ImportCenter(
                                 prop:value=path
                                 on:input=move |ev| set_path.set(event_target_value(&ev))
                             />
+                            <button
+                                class="btn btn-outline"
+                                on:click=move |_| select_dir.run(())
+                            >
+                                <FolderOpen size=14 />
+                                "选择"
+                            </button>
                             <button
                                 class="btn btn-outline"
                                 on:click=move |_| set_path.set(String::new())
@@ -285,108 +309,97 @@ fn ImportSingleFile() -> impl IntoView {
 
 #[component]
 fn RecordsLibrary() -> impl IntoView {
-    let (page, set_page) = signal(1i32);
-    let (filter, set_filter) = signal(RawRecordFilter {
-        source_type: None,
-        batch_id: None,
-        page: 1,
-        page_size: 20,
-    });
+    let (source_type_filter, set_source_type_filter) = signal(Option::<String>::None);
+    let (selected_batch_id, set_selected_batch_id) = signal(Option::<i64>::None);
+    let (batches, set_batches) = signal(Vec::<ImportBatch>::new());
+    let (loading_batches, set_loading_batches) = signal(false);
+    let (search_text, set_search_text) = signal(String::new());
 
-    let records = LocalResource::new(move || {
-        let mut f = filter.get();
-        f.page = page.get();
-        async move { ipc::list_raw_records(&f).await }
-    });
-
-    let (selected_id, set_selected_id) = signal(Option::<i64>::None);
-    let detail = LocalResource::new(move || {
-        let id = selected_id.get();
-        async move {
-            match id {
-                Some(id) => ipc::get_raw_record(id).await.unwrap_or(None),
-                None => None,
+    let load_batches = move || {
+        set_loading_batches.set(true);
+        leptos::task::spawn_local(async move {
+            match ipc::list_import_batches(source_type_filter.get(), Some(3)).await {
+                Ok(list) => set_batches.set(list),
+                Err(_e) => {}
             }
+            set_loading_batches.set(false);
+        });
+    };
+
+    let filtered_batches = Signal::derive(move || {
+        let query = search_text.get().to_lowercase();
+        if query.is_empty() {
+            batches.get()
+        } else {
+            batches
+                .get()
+                .into_iter()
+                .filter(|b| b.file_name.to_lowercase().contains(&query))
+                .collect()
         }
     });
 
-    let (error, _set_error) = signal(Option::<String>::None);
-
-    let on_search = move |_| {
-        set_page.set(1);
-        records.refetch();
-    };
-    let on_reset = move |_| {
-        set_filter.set(RawRecordFilter {
-            source_type: None,
-            batch_id: None,
-            page: 1,
-            page_size: 20,
-        });
-        set_page.set(1);
-        records.refetch();
+    let on_batch_select = move |batch_id: i64| {
+        set_selected_batch_id.set(Some(batch_id));
     };
 
-    let on_imported = move |_: ImportResult| {
-        records.refetch();
-    };
+    load_batches();
 
     view! {
-        <div class="page-content">
+        <div class="page-content flex flex-col flex-1 min-h-0">
             <div class="flex items-center justify-between mb-4">
                 <h1 class="text-lg font-semibold text-primary">"原始记录库"</h1>
             </div>
 
-            <SearchForm
-                fields=record_search_fields()
-                on_search=Callback::new(on_search)
-                on_reset=Callback::new(on_reset)
-            />
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <KpiCard label="总记录数" value="—".to_string() unit=None accent=KpiAccent::Brand />
-                <KpiCard label="待处理" value="—".to_string() unit=None accent=KpiAccent::Warning />
-                <KpiCard label="已匹配" value="—".to_string() unit=None accent=KpiAccent::Success />
-                <KpiCard label="已审核" value="—".to_string() unit=None accent=KpiAccent::Info />
-            </div>
-
-            <div class="card p-3 mb-4">
-                <ImportUploader on_imported=Callback::new(on_imported) />
-            </div>
-
-            <Show when=move || error.get().is_some()>
-                <div class="login-error mb-3">{move || error.get().unwrap_or_default()}</div>
-            </Show>
-
-            <div class="page-grid">
-                <div class="data-table flex flex-col min-h-0">
-                    <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || Suspend::new(async move {
-                            match records.await {
-                                Ok(p) => view! {
-                                    <>
-                                    <RawRecordTable
-                                        rows=p.items.clone()
-                                        selected_id=selected_id
-                                        set_selected_id=set_selected_id
-                                    />
-                                    <div class="border-t border-border-light">
-                                        <Pagination
-                                            total=p.total
-                                            current=p.page
-                                            page_size=p.page_size
-                                        />
-                                    </div>
-                                    </>
-                                }.into_any(),
-                                Err(e) => view! {
-                                    <div class="login-error">{format!("加载记录失败: {e}")}</div>
-                                }.into_any(),
+            <div class="card p-4 mb-4">
+                <div class="flex items-end gap-3">
+                    <div class="form-field flex-1">
+                        <label class="form-label">"文件名搜索"</label>
+                        <input
+                            type="text"
+                            class="form-input"
+                            placeholder="输入文件名过滤..."
+                            prop:value=search_text
+                            on:input=move |ev| set_search_text.set(event_target_value(&ev))
+                        />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">"来源类型"</label>
+                        <select
+                            class="form-input"
+                            on:change=move |ev| {
+                                let val = event_target_value(&ev);
+                                set_source_type_filter.set(if val.is_empty() { None } else { Some(val) });
                             }
-                        })}
-                    </Suspense>
+                        >
+                            <option value="">"全部"</option>
+                            <option value="bank_flow">"银行流水"</option>
+                            <option value="order_flow">"订单流水"</option>
+                            <option value="pos_flow">"POS流水"</option>
+                            <option value="summary_flow">"数据汇总"</option>
+                        </select>
+                    </div>
+                    <button
+                        class="btn btn-primary flex items-center gap-1"
+                        on:click=move |_| load_batches()
+                        disabled=loading_batches
+                    >
+                        <ListFilter size=14 />
+                        {move || if loading_batches.get() { "加载中…" } else { "过滤" }}
+                    </button>
                 </div>
-                <RecordDetail detail=detail />
+            </div>
+
+            <div class="flex-1 min-h-0 grid grid-cols-2 gap-4" style="height: calc(100vh - 280px);">
+                <ImportFileList
+                    batches=filtered_batches
+                    selected_id=selected_batch_id
+                    on_select=Callback::new(on_batch_select)
+                />
+                <ImportFileDetail
+                    batches=batches.into()
+                    selected_id=selected_batch_id
+                />
             </div>
         </div>
     }

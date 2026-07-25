@@ -8,6 +8,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::State;
+use tauri_plugin_dialog::DialogExt;
 
 use crate::commands::session::SessionState;
 use crate::db::DbState;
@@ -39,6 +40,17 @@ pub struct ImportDirResult {
     pub imported: Vec<ImportResult>,
     pub skipped: Vec<String>,
     pub errors: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImportBatch {
+    pub id: i64,
+    pub file_path: String,
+    pub file_name: String,
+    pub source_type: String,
+    pub row_count: i32,
+    pub imported_at: String,
+    pub created_by: Option<String>,
 }
 
 // =====================================================================
@@ -429,6 +441,17 @@ fn parse_and_insert_records(
 // =====================================================================
 
 #[tauri::command]
+pub async fn select_raw_directory_cmd(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let folder = app.dialog().file().blocking_pick_folder();
+
+    match folder {
+        Some(path) => Ok(path.to_string()),
+        None => Err("用户取消了选择".to_string()),
+    }
+}
+
+#[tauri::command]
 pub fn scan_raw_directory_cmd(
     db: State<'_, std::sync::Mutex<DbState>>,
     session: State<'_, std::sync::Mutex<SessionState>>,
@@ -509,6 +532,27 @@ pub fn list_raw_records_cmd(
     filter: RawRecordFilter,
 ) -> Result<RawRecordPage, String> {
     with_company_conn(&db, &session, |conn| list_raw_records_core(conn, &filter))
+}
+
+#[tauri::command]
+pub fn list_import_batches_cmd(
+    db: State<'_, std::sync::Mutex<DbState>>,
+    session: State<'_, std::sync::Mutex<SessionState>>,
+    source_type: Option<String>,
+    months: Option<i32>,
+) -> Result<Vec<ImportBatch>, String> {
+    with_company_conn(&db, &session, |conn| {
+        list_import_batches_core(conn, source_type.as_deref(), months)
+    })
+}
+
+#[tauri::command]
+pub fn get_import_batch_cmd(
+    db: State<'_, std::sync::Mutex<DbState>>,
+    session: State<'_, std::sync::Mutex<SessionState>>,
+    batch_id: i64,
+) -> Result<Option<ImportBatch>, String> {
+    with_company_conn(&db, &session, |conn| get_import_batch_core(conn, batch_id))
 }
 
 #[tauri::command]
@@ -629,6 +673,14 @@ pub fn list_raw_audit_logs_cmd(
     })
 }
 
+#[tauri::command]
+pub async fn read_source_file_cmd(file_path: String) -> Result<String, String> {
+    let content = tokio::fs::read_to_string(&file_path)
+        .await
+        .map_err(|e| format!("读取文件失败: {e}"))?;
+    Ok(content)
+}
+
 // =====================================================================
 // 功能单元测试
 // =====================================================================
@@ -651,6 +703,7 @@ pub struct RawRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
+    pub file_path: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -737,6 +790,72 @@ pub struct VoucherSummary {
     pub credit_total: String,
 }
 
+pub fn list_import_batches_core(
+    conn: &rusqlite::Connection,
+    source_type: Option<&str>,
+    months: Option<i32>,
+) -> Result<Vec<ImportBatch>, String> {
+    let mut sql = String::from(
+        "SELECT id, file_path, file_name, source_type, row_count, imported_at, created_by
+         FROM import_batches WHERE 1 = 1",
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    if let Some(t) = source_type {
+        sql.push_str(" AND source_type = ?");
+        params.push(Box::new(t.to_string()));
+    }
+    if let Some(m) = months {
+        sql.push_str(" AND imported_at >= date('now', ?)");
+        params.push(Box::new(format!("-{} months", m)));
+    }
+    sql.push_str(" ORDER BY imported_at DESC");
+
+    let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("查询导入批次失败: {e}"))?;
+    let items = stmt
+        .query_map(rusqlite::params_from_iter(refs.iter()), |row| {
+            Ok(ImportBatch {
+                id: row.get(0)?,
+                file_path: row.get(1)?,
+                file_name: row.get(2)?,
+                source_type: row.get(3)?,
+                row_count: row.get(4)?,
+                imported_at: row.get(5)?,
+                created_by: row.get(6)?,
+            })
+        })
+        .map_err(|e| format!("查询导入批次失败: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("查询导入批次失败: {e}"))?;
+    Ok(items)
+}
+
+pub fn get_import_batch_core(
+    conn: &rusqlite::Connection,
+    batch_id: i64,
+) -> Result<Option<ImportBatch>, String> {
+    conn.query_row(
+        "SELECT id, file_path, file_name, source_type, row_count, imported_at, created_by
+         FROM import_batches WHERE id = ?1",
+        rusqlite::params![batch_id],
+        |row| {
+            Ok(ImportBatch {
+                id: row.get(0)?,
+                file_path: row.get(1)?,
+                file_name: row.get(2)?,
+                source_type: row.get(3)?,
+                row_count: row.get(4)?,
+                imported_at: row.get(5)?,
+                created_by: row.get(6)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| format!("查询导入批次失败: {e}"))
+}
+
 pub fn list_raw_records_core(
     conn: &rusqlite::Connection,
     filter: &RawRecordFilter,
@@ -771,9 +890,10 @@ pub fn list_raw_records_core(
     let list_sql = format!(
         "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
                 sr.record_no, sr.record_date, sr.amount_total, sr.currency, sr.counterpart_info,
-                sr.summary, sr.status, sr.created_at
+                sr.summary, sr.status, sr.created_at, ib.file_path
          FROM source_records sr
          JOIN source_types st ON sr.source_type_id = st.id
+         LEFT JOIN import_batches ib ON sr.import_batch_id = ib.id
          {where_clause}
          ORDER BY sr.record_date DESC, sr.id DESC
          LIMIT ? OFFSET ?"
@@ -802,6 +922,7 @@ pub fn list_raw_records_core(
                 summary: row.get(11)?,
                 status: row.get(12)?,
                 created_at: row.get(13)?,
+                file_path: row.get::<_, Option<String>>(14)?.unwrap_or_default(),
             })
         })
         .map_err(|e| format!("查询原始记录失败: {e}"))?
@@ -824,9 +945,10 @@ pub fn get_raw_record_core(
         .query_row(
             "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
                     sr.record_no, sr.record_date, sr.amount_total, sr.currency, sr.counterpart_info,
-                    sr.summary, sr.status, sr.created_at, sr.raw_data
+                    sr.summary, sr.status, sr.created_at, sr.raw_data, ib.file_path
              FROM source_records sr
              JOIN source_types st ON sr.source_type_id = st.id
+             LEFT JOIN import_batches ib ON sr.import_batch_id = ib.id
              WHERE sr.id = ?1",
             rusqlite::params![id],
             |row| {
@@ -846,6 +968,7 @@ pub fn get_raw_record_core(
                         summary: row.get(11)?,
                         status: row.get(12)?,
                         created_at: row.get(13)?,
+                        file_path: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
                     },
                     row.get::<_, String>(14)?,
                 ))

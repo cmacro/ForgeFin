@@ -250,6 +250,17 @@ pub struct ImportDirResult {
     pub errors: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImportBatch {
+    pub id: i64,
+    pub file_path: String,
+    pub file_name: String,
+    pub source_type: String,
+    pub row_count: i32,
+    pub imported_at: String,
+    pub created_by: Option<String>,
+}
+
 // =====================================================================
 // invoke 封装。统一错误为 String。
 //
@@ -452,6 +463,18 @@ pub async fn scan_raw_directory(path: String) -> Result<Vec<RawFileInfo>, String
     invoke("scan_raw_directory_cmd", &serde_json::json!({"path": path})).await
 }
 
+pub async fn select_raw_directory() -> Result<String, String> {
+    invoke("select_raw_directory_cmd", &()).await
+}
+
+pub async fn read_source_file(file_path: String) -> Result<String, String> {
+    invoke(
+        "read_source_file_cmd",
+        &serde_json::json!({"filePath": file_path}),
+    )
+    .await
+}
+
 pub async fn auto_import_raw_directory(path: String) -> Result<ImportDirResult, String> {
     invoke(
         "auto_import_raw_directory_cmd",
@@ -496,6 +519,7 @@ pub struct RawRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
+    pub file_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -626,4 +650,39 @@ pub async fn list_audit_logs(
         &serde_json::json!({"entityType": entity_type, "entityId": entity_id, "page": page, "pageSize": page_size}),
     )
     .await
+}
+
+pub async fn list_import_batches(
+    source_type: Option<String>,
+    months: Option<i32>,
+) -> Result<Vec<ImportBatch>, String> {
+    invoke(
+        "list_import_batches_cmd",
+        &serde_json::json!({"sourceType": source_type, "months": months}),
+    )
+    .await
+}
+
+pub async fn get_import_batch(batch_id: i64) -> Result<Option<ImportBatch>, String> {
+    invoke(
+        "get_import_batch_cmd",
+        &serde_json::json!({"batchId": batch_id}),
+    )
+    .await
+}
+
+const IMPORT_DIR_KEY: &str = "forgefin_import_dir";
+
+pub fn get_stored_import_dir() -> Option<String> {
+    let window = web_sys::window()?;
+    let result = window.local_storage().ok()?;
+    let storage = result?;
+    storage.get(IMPORT_DIR_KEY).ok().flatten()
+}
+
+pub fn set_stored_import_dir(path: &str) {
+    let window = web_sys::window().unwrap();
+    if let Ok(Some(storage)) = window.local_storage() {
+        let _ = storage.set(IMPORT_DIR_KEY, path);
+    }
 }

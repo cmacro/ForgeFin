@@ -1,13 +1,34 @@
 use leptos::prelude::*;
-use lucide_leptos::{FileText, Paperclip};
+use lucide_leptos::{FileCode, FileText, Paperclip};
 
-use crate::ipc::{AttachmentInfo, AuditLogEntry, RawRecordDetail};
+use crate::ipc::{self, AttachmentInfo, AuditLogEntry, RawRecordDetail};
 
 /// 原始记录详情面板。
 ///
 /// 展示 raw_data JSON、来源文件、行号、附件列表与审计日志。
 #[component]
 pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl IntoView {
+    let (file_content, set_file_content) = signal(Option::<String>::None);
+    let (loading_content, set_loading_content) = signal(false);
+    let (content_error, set_content_error) = signal(Option::<String>::None);
+
+    let load_file_content = move |file_path: String| {
+        if file_path.is_empty() {
+            set_content_error.set(Some("文件路径为空".to_string()));
+            return;
+        }
+        set_loading_content.set(true);
+        set_content_error.set(None);
+        set_file_content.set(None);
+        leptos::task::spawn_local(async move {
+            match ipc::read_source_file(file_path).await {
+                Ok(content) => set_file_content.set(Some(content)),
+                Err(e) => set_content_error.set(Some(format!("读取文件失败: {e}"))),
+            }
+            set_loading_content.set(false);
+        });
+    };
+
     view! {
         <div class="card flex flex-col min-h-0">
             <div class="card-header">
@@ -19,19 +40,42 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
                     let detail = detail.clone();
                     match detail.map(|d| d.clone()) {
                         Some(Some(d)) => {
-                            let r = d.record;
+                            let r = d.record.clone();
+                            let fp = r.file_path.clone();
                             view! {
                                 <>
                                 <div class="detail-grid">
                                     <DetailField label="ID" value={r.id.to_string()} />
                                     <DetailField label="来源类型" value=r.source_type_name />
                                     <DetailField label="来源文件" value=r.source_file_name />
+                                    <DetailField label="完整路径" value=r.file_path.clone() />
                                     <DetailField label="行号" value=r.source_row_no.to_string() />
                                     <DetailField label="业务单号" value=r.record_no.unwrap_or("—".to_string()) />
                                     <DetailField label="日期" value=r.record_date.unwrap_or("—".to_string()) />
                                     <DetailField label="金额" value=r.amount_total.unwrap_or("—".to_string()) />
                                     <DetailField label="币种" value=r.currency />
                                     <DetailField label="状态" value=status_cn(&r.status) />
+                                </div>
+                                <div class="border-t border-border p-3">
+                                    <button
+                                        class="btn btn-sm btn-outline flex items-center gap-1 mb-2"
+                                        on:click=move |_| load_file_content(fp.clone())
+                                        disabled=loading_content
+                                    >
+                                        <FileCode size=14 />
+                                        {move || if loading_content.get() { "加载中…" } else { "查看源文件内容" }}
+                                    </button>
+                                    <Show when=move || content_error.get().is_some()>
+                                        <div class="login-error mt-2 text-13">{move || content_error.get().unwrap_or_default()}</div>
+                                    </Show>
+                                    <Show when=move || file_content.get().is_some()>
+                                        <div class="mt-2">
+                                            <div class="text-13 text-secondary mb-1">"源文件内容"</div>
+                                            <pre class="bg-surface p-2 rounded text-12 overflow-auto" style="max-height: 300px;">
+                                                {move || file_content.get().unwrap_or_default()}
+                                            </pre>
+                                        </div>
+                                    </Show>
                                 </div>
                                 <div class="border-t border-border p-3">
                                     <div class="text-13 text-secondary mb-2">"原始数据 (JSON)"</div>

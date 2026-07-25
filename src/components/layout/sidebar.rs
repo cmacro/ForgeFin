@@ -13,11 +13,9 @@ pub fn Sidebar(nav: NavState) -> impl IntoView {
         >
             <div class="sidebar-logo">
                 <div class="sidebar-logo-icon">
-                    "FF"
+                  "FF"
                 </div>
-                <Show when=move || !nav.collapsed.get()>
-                    <span>"ForgeFin"</span>
-                </Show>
+                <span class="sidebar-logo-text">"ForgeFin"</span>
             </div>
 
             <nav class="sidebar-nav">
@@ -35,7 +33,6 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
     let item_key = item.key;
     let nav_expand = nav.clone();
     let nav_child = nav.clone();
-    let collapsed = nav.collapsed;
     let children = item.children.clone();
     let children_stored = StoredValue::new(children);
     let icon = item.icon;
@@ -52,23 +49,19 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
                         class="sidebar-section-title"
                         on:click=move |_| nav_expand.toggle_expand(item_key)
                     >
-                        <span class=("hidden", move || collapsed.get())>{label}</span>
-                        <Show when=move || !collapsed.get()>
-                            <span
-                                class="sidebar-item-icon"
-                                class=("rotate-90", is_expanded)
-                            >
-                                <ChevronRight size=12 />
-                            </span>
-                        </Show>
+                        <span>{label}</span>
+                        <span
+                            class="sidebar-item-icon"
+                            class=("rotate-90", is_expanded)
+                        >
+                            <ChevronRight size=12 />
+                        </span>
                     </div>
-                    <Show when=move || is_expanded() && !collapsed.get()>
-                        <ul class="py-4">
-                            <For each=move || children_stored.get_value().unwrap_or_default() key=|child| child.label let:child>
-                                <NavItemRow item=child nav=nav_child.clone() depth=depth_for_child />
-                            </For>
-                        </ul>
-                    </Show>
+                    <ul class="py-4" class=("expanded", is_expanded)>
+                        <For each=move || children_stored.get_value().unwrap_or_default() key=|child| child.label let:child>
+                            <NavItemRow item=child nav=nav_child.clone() depth=depth_for_child />
+                        </For>
+                    </ul>
                 }.into_any()
             } else {
                 view! {
@@ -81,7 +74,7 @@ fn NavItemRow(item: NavItem, nav: NavState, depth: u8) -> AnyView {
                         <span class="sidebar-item-icon">
                             <NavIcon name=icon />
                         </span>
-                        <span class=("hidden", move || collapsed.get())>{label}</span>
+                        <span class="sidebar-item-label">{label}</span>
                     </div>
                 }.into_any()
             }}

@@ -10,7 +10,7 @@
     background: var(--color-sidebar);
     color: var(--color-sidebar-text);
     flex-shrink: 0;
-    overflow-y: auto;
+    overflow: hidden;
     transition: width var(--transition-normal);
   }
 
@@ -18,9 +18,10 @@
     width: 64px;
   }
 
-  .sidebar.collapsed .sidebar-logo {
-    justify-content: center;
-    padding: 0;
+  .sidebar.collapsed .sidebar-logo-text {
+    margin-left: 0;
+    max-width: 0;
+    opacity: 0;
   }
 
   .sidebar.collapsed .sidebar-nav {
@@ -30,9 +31,8 @@
   .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: 10px;
     height: var(--layout-header-height);
-    padding: 0 20px;
+    padding: 0 16px;
     font-size: 16px;
     font-weight: 600;
     color: #ffffff;
@@ -44,19 +44,34 @@
     width: 32px;
     height: 32px;
     border-radius: var(--radius-md);
-    background: var(--color-brand);
+    background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 600;
+    /* color: #1677ff; */
+    color: var(--color-brand);
   }
 
-  .sidebar-nav {
-    flex: 1;
-    padding: 12px 8px;
+  .sidebar-logo-text {
+    margin-left: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 180px;
+    opacity: 1;
+    transition: margin-left var(--transition-normal), max-width var(--transition-normal), opacity var(--transition-normal);
   }
+
+   .sidebar-nav {
+     flex: 1;
+     padding: 12px 8px;
+     overflow-y: auto;
+     scrollbar-width: none;
+     -ms-overflow-style: none;
+   }
+
+   .sidebar-nav::-webkit-scrollbar {
+     display: none;
+   }
 
   .sidebar-section-title {
     display: flex;
@@ -79,6 +94,35 @@
     display: none;
   }
 
+  .sidebar-nav > li > ul {
+    display: none;
+  }
+
+  .sidebar-nav > li > ul.expanded {
+    display: block;
+  }
+
+  .sidebar.collapsed .sidebar-nav > li > ul {
+    display: none;
+  }
+
+  .sidebar.collapsed .sidebar-nav > li:has(.sidebar-section-title) {
+    display: none;
+  }
+
+  .sidebar.collapsed .sidebar-item-label {
+    display: none;
+  }
+
+  .sidebar.collapsed .sidebar-item {
+    height: 36px;
+  }
+
+  .sidebar-nav li {
+    display: block;
+    list-style: none;
+  }
+
   .sidebar-item {
     display: flex;
     align-items: center;
@@ -88,6 +132,7 @@
     color: var(--color-sidebar-text);
     font-size: 14px;
     cursor: pointer;
+    min-height: 36px;
     transition: background var(--transition-fast), color var(--transition-fast);
   }
 

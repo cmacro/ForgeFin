@@ -14,6 +14,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(DbState::new()))
         .manage(std::sync::Mutex::new(commands::session::SessionState::new()))
         .invoke_handler(tauri::generate_handler![
@@ -52,6 +53,10 @@ pub fn run() {
             voucher::next_voucher_no_cmd,
             // raw data
             raw::scan_raw_directory_cmd,
+            raw::select_raw_directory_cmd,
+            raw::read_source_file_cmd,
+            raw::list_import_batches_cmd,
+            raw::get_import_batch_cmd,
             raw::auto_import_raw_directory_cmd,
             raw::import_raw_file_cmd,
             raw::list_raw_records_cmd,
