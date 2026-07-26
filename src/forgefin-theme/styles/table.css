@@ -125,8 +125,40 @@
   }
 
   /* ===========================
+     Balance Check (银行流水余额连续性)
+     ---------------------------
+     业务规则:本行余额 = 上一行余额 + 转入金额 − 转出金额
+     - ok: 整行(默认) + 余额列绿色高亮
+     - mismatch: 整行浅红底色 + 余额列红色加粗
+     - skip: 整行无样式(余额缺失/无法计算)
+   =========================== */
+  .data-table tbody tr.balance-ok {
+    /* 整行无背景,只对余额单元格上色 */
+  }
+  .data-table tbody tr.balance-ok td.balance-cell {
+    color: var(--color-success);
+    font-weight: 500;
+  }
+
+  .data-table tbody tr.balance-mismatch {
+    background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  }
+  .data-table tbody tr.balance-mismatch td.balance-cell {
+    color: var(--color-danger);
+    font-weight: 600;
+  }
+
+  .data-table tbody tr.balance-mismatch:hover {
+    background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  }
+
+  .data-table tbody tr.balance-skip {
+    /* 整行无背景,样式保持默认 */
+  }
+
+  /* ===========================
      Pagination
-  =========================== */
+     =========================== */
 
   .pagination {
     display: flex;

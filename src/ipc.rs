@@ -241,6 +241,10 @@ pub struct ImportResult {
     pub source_type: String,
     pub row_count: i32,
     pub file_hash: String,
+    #[serde(default)]
+    pub skipped_count: i32,
+    #[serde(default)]
+    pub balance_check_warning: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -514,12 +518,20 @@ pub struct RawRecord {
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_total: Option<String>,
+    pub balance: Option<String>,
     pub currency: String,
     pub counterpart_info: Option<String>,
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
     pub file_path: String,
+    /// 余额连续性校验结果:
+    /// - `"ok"`:本行余额与(上一行余额 + 转入 - 转出)一致
+    /// - `"mismatch"`:不一致
+    /// - `"skip"`:无法计算(余额缺失/无上一行等)
+    /// - `None`:不适用(非 bank_flow)
+    #[serde(default)]
+    pub balance_check_status: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -566,6 +578,15 @@ pub struct ReconcileResult {
     pub created_summary_ids: Vec<i64>,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GenerateSummaryResult {
+    pub date_from: String,
+    pub date_to: String,
+    pub generated_count: i32,
+    pub skipped_count: i32,
+    pub errors: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ReconciliationItem {
     pub id: i64,
@@ -610,8 +631,45 @@ pub async fn get_raw_record(id: i64) -> Result<Option<RawRecordDetail>, String> 
     invoke("get_raw_record_cmd", &serde_json::json!({"id": id})).await
 }
 
+/// UI 列显示偏好(账套级 × 来源类型)。
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ColumnPrefs {
+    pub source_type: String,
+    pub columns: std::collections::BTreeMap<String, bool>,
+}
+
+pub async fn get_column_prefs(source_type: String) -> Result<ColumnPrefs, String> {
+    invoke(
+        "get_column_prefs_cmd",
+        &serde_json::json!({"sourceType": source_type}),
+    )
+    .await
+}
+
+pub async fn save_column_prefs(
+    source_type: String,
+    columns: std::collections::BTreeMap<String, bool>,
+) -> Result<ColumnPrefs, String> {
+    invoke(
+        "save_column_prefs_cmd",
+        &serde_json::json!({"sourceType": source_type, "columns": columns}),
+    )
+    .await
+}
+
 pub async fn reconcile(date: String) -> Result<ReconcileResult, String> {
     invoke("reconcile_cmd", &serde_json::json!({"date": date})).await
+}
+
+pub async fn generate_summary(
+    date_from: String,
+    date_to: String,
+) -> Result<GenerateSummaryResult, String> {
+    invoke(
+        "generate_summary_cmd",
+        &serde_json::json!({"dateFrom": date_from, "dateTo": date_to}),
+    )
+    .await
 }
 
 pub async fn list_reconciliation_items(

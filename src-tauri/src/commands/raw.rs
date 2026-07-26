@@ -33,6 +33,10 @@ pub struct ImportResult {
     pub source_type: String,
     pub row_count: i32,
     pub file_hash: String,
+    #[serde(default)]
+    pub skipped_count: i32,
+    #[serde(default)]
+    pub balance_check_warning: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -74,7 +78,7 @@ fn current_user_id(session: &SessionState) -> Option<String> {
         .and_then(|g| g.as_ref().map(|u| u.id.clone()))
 }
 
-fn with_company_conn<F, T>(
+pub(crate) fn with_company_conn<F, T>(
     db: &State<'_, std::sync::Mutex<DbState>>,
     session: &State<'_, std::sync::Mutex<SessionState>>,
     f: F,
@@ -124,7 +128,7 @@ fn parse_amount(value: &str) -> Option<Decimal> {
     Decimal::from_str_exact(&cleaned).ok()
 }
 
-fn now_str() -> String {
+pub(crate) fn now_str() -> String {
     Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
@@ -149,6 +153,23 @@ fn extract_value(map: &HashMap<String, String>, keys: &[&str]) -> Option<String>
         }
     }
     None
+}
+
+/// 计算原始行的指纹 hash,用于审计与排查(不参与数据库唯一约束)。
+///
+/// 组成:来源类型 + 业务单号(record_no) + 日期 + 金额 + 对方单位。
+/// 任一字段为空时仍能稳定产出指纹,空字符串参与拼接而非被省略。
+fn compute_row_hash(source_type: &str, fields: &[Option<&String>; 4]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(source_type.as_bytes());
+    hasher.update([0x1f]);
+    for field in fields {
+        let value: &str = field.as_deref().map_or("", |v| v.as_str());
+        hasher.update(value.as_bytes());
+        hasher.update([0x1e]);
+    }
+    let digest = hasher.finalize();
+    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn compute_amount_total(map: &HashMap<String, String>, source_type: &str) -> Option<String> {
@@ -237,6 +258,20 @@ pub fn scan_directory_core(
             continue;
         };
 
+        // 数据汇总是由系统按银行流水 / POS 流水 / 微信备注自动派生,
+        // 不允许导入。扫描时把这类文件标记为 unsupported,
+        // 导入中心就不会展示"导入"按钮。
+        if source_type == "summary_flow" {
+            result.push(RawFileInfo {
+                file_path,
+                file_name,
+                source_type: source_type.to_string(),
+                status: "unsupported".to_string(),
+                row_count: 0,
+            });
+            continue;
+        }
+
         let file_hash = sha256_file(&path)?;
         let imported: bool = conn
             .query_row(
@@ -284,6 +319,16 @@ pub fn import_file_core(
         .or(detected)
         .ok_or_else(|| format!("无法识别文件类型: {file_name}"))?;
 
+    // 业务规则:数据汇总(summary_flow) 不允许导入。
+    // 实际汇总由系统按"银行流水 + POS 流水 + 微信聊天备注"自动生成,
+    // 参见 `generate_summary_core`。这里统一拒绝任何 summary_flow 导入,
+    // 不论显式传入还是根据文件名自动识别。
+    if source_type == "summary_flow" {
+        return Err(format!(
+            "数据汇总不允许导入: 数据汇总由系统自动从银行流水、POS 流水和微信备注生成,无需上传 ({file_name})"
+        ));
+    }
+
     let file_hash = sha256_file(path)?;
 
     // 重复导入检查
@@ -322,7 +367,7 @@ pub fn import_file_core(
 
     let import_batch_id = conn.last_insert_rowid();
 
-    let row_count =
+    let (row_count, skipped_count, balance_check_warning) =
         parse_and_insert_records(conn, path, source_type_id, import_batch_id, source_type)?;
 
     conn.execute(
@@ -337,6 +382,8 @@ pub fn import_file_core(
         source_type: source_type.to_string(),
         row_count,
         file_hash,
+        skipped_count,
+        balance_check_warning,
     })
 }
 
@@ -371,7 +418,7 @@ fn parse_and_insert_records(
     source_type_id: i64,
     import_batch_id: i64,
     source_type: &str,
-) -> Result<i32, String> {
+) -> Result<(i32, i32, Option<String>), String> {
     let content =
         fs::read_to_string(path).map_err(|e| format!("读取文件失败 ({}): {e}", path.display()))?;
     let mut lines = content.lines();
@@ -386,7 +433,23 @@ fn parse_and_insert_records(
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
 
-    let mut inserted = 0;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("开启导入事务失败: {e}"))?;
+
+    let mut inserted: i32 = 0;
+    let mut skipped: i32 = 0;
+    let ts_now = now_str();
+
+    // 仅对银行流水启用余额连续性校验。
+    // 跟踪:首行余额、末行余额、累计 Σ转入 - Σ转出、上行余额。
+    let is_bank_flow = source_type == "bank_flow";
+    let mut first_balance: Option<Decimal> = None;
+    let mut last_balance: Option<Decimal> = None;
+    let mut sum_in: Decimal = Decimal::ZERO;
+    let mut sum_out: Decimal = Decimal::ZERO;
+    let mut prev_balance: Option<Decimal> = None;
+    let mut discontinuity_rows: i32 = 0;
 
     for (idx, line) in lines.enumerate() {
         let line = line.trim();
@@ -410,11 +473,56 @@ fn parse_and_insert_records(
         let summary = extract_value(&map, &["摘要", "事由", "用途", "项目"]);
         let record_no = extract_value(&map, &["工行订单号", "商户订单号", "凭证号", "收据编号"]);
         let amount_total = compute_amount_total(&map, source_type);
+        let balance = extract_balance(&map);
 
-        conn.execute(
+        let row_hash = compute_row_hash(
+            source_type,
+            &[
+                record_no.as_ref(),
+                record_date.as_ref(),
+                amount_total.as_ref(),
+                counterpart_info.as_ref(),
+            ],
+        );
+
+        // 余额连续性校验(银行流水专属)
+        let mut balance_disc: Option<String> = None;
+        if is_bank_flow {
+            let cur_in = extract_decimal(&map, &["转入金额"]);
+            let cur_out = extract_decimal(&map, &["转出金额"]);
+            let cur_bal_decimal = balance.as_ref().and_then(|v| parse_amount(v));
+
+            if let (Some(prev), Some(cur_bal), Some(in_amt), Some(out_amt)) =
+                (prev_balance, cur_bal_decimal, cur_in, cur_out)
+            {
+                let expected = prev + in_amt - out_amt;
+                let diff = expected - cur_bal;
+                if !is_within_balance_tolerance(diff) {
+                    balance_disc = Some(format!(
+                        "余额不连续:上一行余额 {prev} + 转入 {in_amt} - 转出 {out_amt} = {expected},实际 {cur_bal},差额 {diff}"
+                    ));
+                }
+            }
+
+            if let Some(b) = cur_bal_decimal {
+                if first_balance.is_none() {
+                    first_balance = Some(b);
+                }
+                last_balance = Some(b);
+                prev_balance = Some(b);
+            }
+            if let Some(in_amt) = cur_in {
+                sum_in += in_amt;
+            }
+            if let Some(out_amt) = cur_out {
+                sum_out += out_amt;
+            }
+        }
+
+        let insert_res = tx.execute(
             "INSERT INTO source_records
-             (source_type_id, import_batch_id, source_file_name, source_row_no, record_no, record_date, amount_total, currency, counterpart_info, summary, raw_data, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'CNY', ?8, ?9, ?10, 'pending', ?11)",
+             (source_type_id, import_batch_id, source_file_name, source_row_no, record_no, record_date, amount_total, balance, currency, counterpart_info, summary, raw_data, row_hash, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'CNY', ?9, ?10, ?11, ?12, 'pending', ?13)",
             rusqlite::params![
                 source_type_id,
                 import_batch_id,
@@ -423,17 +531,149 @@ fn parse_and_insert_records(
                 record_no,
                 record_date,
                 amount_total,
+                balance,
                 counterpart_info,
                 summary,
                 raw_data,
-                now_str(),
+                row_hash,
+                ts_now,
             ],
-        )
-        .map_err(|e| format!("写入 source_records 失败 (行 {row_no}): {e}"))?;
-        inserted += 1;
+        );
+
+        match insert_res {
+            Ok(_) => {
+                inserted += 1;
+                if let Some(msg) = balance_disc {
+                    tx.execute(
+                        "INSERT INTO import_errors
+                         (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
+                         VALUES (?1, ?2, 'balance_discontinuity', ?3, ?4, ?5)",
+                        rusqlite::params![
+                            import_batch_id,
+                            row_no,
+                            balance.as_deref().unwrap_or(""),
+                            msg,
+                            ts_now,
+                        ],
+                    )
+                    .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
+                    discontinuity_rows += 1;
+                }
+            }
+            Err(rusqlite::Error::SqliteFailure(err, _))
+                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
+                // 行级唯一约束触发:写入 import_errors,继续处理其余行
+                let dup_value = record_no
+                    .clone()
+                    .or_else(|| record_date.clone())
+                    .unwrap_or_default();
+                tx.execute(
+                    "INSERT INTO import_errors
+                     (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
+                     VALUES (?1, ?2, 'duplicate_row', ?3, ?4, ?5)",
+                    rusqlite::params![
+                        import_batch_id,
+                        row_no,
+                        dup_value,
+                        "原始行已存在,跳过入库(可能来源文件存在重叠)",
+                        ts_now,
+                    ],
+                )
+                .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
+                skipped += 1;
+            }
+            Err(e) => {
+                return Err(format!("写入 source_records 失败 (行 {row_no}): {e}"));
+            }
+        }
     }
 
-    Ok(inserted)
+    // 首末余额差额自检(银行流水专属)
+    let balance_warning = if is_bank_flow {
+        check_balance_first_last(
+            first_balance,
+            last_balance,
+            sum_in,
+            sum_out,
+            discontinuity_rows,
+        )
+    } else {
+        None
+    };
+
+    tx.commit().map_err(|e| format!("提交导入事务失败: {e}"))?;
+
+    Ok((inserted, skipped, balance_warning))
+}
+
+/// 从 TSV 行 map 中抽出"余额"字段(Decimal-as-string)。
+fn extract_balance(map: &HashMap<String, String>) -> Option<String> {
+    if let Some(v) = map.get("余额") {
+        if !v.is_empty() {
+            if let Some(d) = parse_amount(v) {
+                return Some(d.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// 从 TSV 行 map 中抽出指定键的第一个非空值,转成 Decimal。
+fn extract_decimal(map: &HashMap<String, String>, keys: &[&str]) -> Option<Decimal> {
+    for key in keys {
+        if let Some(v) = map.get(*key) {
+            if !v.is_empty() {
+                if let Some(d) = parse_amount(v) {
+                    return Some(d);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 余额连续性容差:允许 ±0.01(四舍五入、银行拆分行可能产生 1 分误差)。
+fn is_within_balance_tolerance(diff: Decimal) -> bool {
+    let abs = if diff.is_sign_negative() { -diff } else { diff };
+    abs <= Decimal::new(1, 2)
+}
+
+/// 首末余额 vs Σ差额自检。
+///
+/// 当文件至少 2 行有余额时计算 `末行余额 - 首行余额` 与 `Σ转入 - Σ转出`,
+/// 不一致(> 0.01)时返回警告字符串。
+fn check_balance_first_last(
+    first: Option<Decimal>,
+    last: Option<Decimal>,
+    sum_in: Decimal,
+    sum_out: Decimal,
+    discontinuity_rows: i32,
+) -> Option<String> {
+    if first.is_none() || last.is_none() {
+        return None;
+    }
+    let first = first?;
+    let last = last?;
+    let by_balance = last - first;
+    let by_amount = sum_in - sum_out;
+    let diff = by_balance - by_amount;
+    let mut parts: Vec<String> = Vec::new();
+    if !is_within_balance_tolerance(diff) {
+        parts.push(format!(
+            "首末余额差额 {by_balance} 与 Σ(转入) - Σ(转出) = {by_amount} 不一致,差额 {diff}"
+        ));
+    }
+    if discontinuity_rows > 0 {
+        parts.push(format!(
+            "{discontinuity_rows} 行余额连续性校验失败(疑似文件截断/篡改)"
+        ));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
 }
 
 // =====================================================================
@@ -562,6 +802,18 @@ pub fn get_raw_record_cmd(
     id: i64,
 ) -> Result<Option<RawRecordDetail>, String> {
     with_company_conn(&db, &session, |conn| get_raw_record_core(conn, id))
+}
+
+#[tauri::command]
+pub fn generate_summary_cmd(
+    db: State<'_, std::sync::Mutex<DbState>>,
+    session: State<'_, std::sync::Mutex<SessionState>>,
+    date_from: String,
+    date_to: String,
+) -> Result<GenerateSummaryResult, String> {
+    with_company_conn(&db, &session, |conn| {
+        generate_summary_core(conn, &date_from, &date_to)
+    })
 }
 
 #[tauri::command]
@@ -698,12 +950,20 @@ pub struct RawRecord {
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_total: Option<String>,
+    pub balance: Option<String>,
     pub currency: String,
     pub counterpart_info: Option<String>,
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
     pub file_path: String,
+    /// 余额连续性校验结果:
+    /// - `"ok"`:本行余额与(上一行余额 + 转入 - 转出)一致
+    /// - `"mismatch"`:不一致
+    /// - `"skip"`:无法计算(余额为空/缺转入或转出/无上一行)
+    /// - `None`:不适用(非 bank_flow)
+    #[serde(default)]
+    pub balance_check_status: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -778,6 +1038,16 @@ pub struct ReconcileResult {
     pub matched_dates: Vec<String>,
     pub diff_dates: Vec<String>,
     pub created_summary_ids: Vec<i64>,
+}
+
+/// 数据汇总生成结果(占位):后续实现按日期范围从三类源数据派生汇总行。
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GenerateSummaryResult {
+    pub date_from: String,
+    pub date_to: String,
+    pub generated_count: i32,
+    pub skipped_count: i32,
+    pub errors: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -875,6 +1145,19 @@ pub fn list_raw_records_core(
         params.push(Box::new(b));
     }
 
+    // 计算余额连续性(仅对 bank_flow 适用)
+    let balance_check_map: std::collections::HashMap<i64, String> = if filter
+        .source_type
+        .as_deref()
+        .map(|t| t == "bank_flow")
+        .unwrap_or(true)
+    {
+        let rows = fetch_balance_check_rows(conn, filter.source_type.as_deref())?;
+        compute_balance_check_status(&rows)
+    } else {
+        std::collections::HashMap::new()
+    };
+
     let count_sql = format!(
         "SELECT COUNT(*) FROM source_records sr JOIN source_types st ON sr.source_type_id = st.id{where_clause}"
     );
@@ -889,7 +1172,7 @@ pub fn list_raw_records_core(
 
     let list_sql = format!(
         "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
-                sr.record_no, sr.record_date, sr.amount_total, sr.currency, sr.counterpart_info,
+                sr.record_no, sr.record_date, sr.amount_total, sr.balance, sr.currency, sr.counterpart_info,
                 sr.summary, sr.status, sr.created_at, ib.file_path
          FROM source_records sr
          JOIN source_types st ON sr.source_type_id = st.id
@@ -907,8 +1190,10 @@ pub fn list_raw_records_core(
         .map_err(|e| format!("查询原始记录失败: {e}"))?;
     let items = stmt
         .query_map(rusqlite::params_from_iter(list_refs.iter()), |row| {
+            let id: i64 = row.get(0)?;
+            let balance_check_status = balance_check_map.get(&id).cloned();
             Ok(RawRecord {
-                id: row.get(0)?,
+                id,
                 source_type: row.get(1)?,
                 source_type_name: row.get(2)?,
                 import_batch_id: row.get(3)?,
@@ -917,12 +1202,14 @@ pub fn list_raw_records_core(
                 record_no: row.get(6)?,
                 record_date: row.get(7)?,
                 amount_total: row.get(8)?,
-                currency: row.get(9)?,
-                counterpart_info: row.get(10)?,
-                summary: row.get(11)?,
-                status: row.get(12)?,
-                created_at: row.get(13)?,
-                file_path: row.get::<_, Option<String>>(14)?.unwrap_or_default(),
+                balance: row.get(9)?,
+                currency: row.get(10)?,
+                counterpart_info: row.get(11)?,
+                summary: row.get(12)?,
+                status: row.get(13)?,
+                created_at: row.get(14)?,
+                file_path: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
+                balance_check_status,
             })
         })
         .map_err(|e| format!("查询原始记录失败: {e}"))?
@@ -937,14 +1224,122 @@ pub fn list_raw_records_core(
     })
 }
 
+/// 余额连续性校验的轻量数据(从 raw_data 抽取必要字段)
+#[derive(Debug)]
+struct BalanceCheckRow {
+    id: i64,
+    balance: Option<String>,
+    /// raw_data JSON 字符串
+    raw_data: String,
+}
+
+/// 解析 raw_data JSON,提取"转入金额"、"转出金额"。
+/// 银行流水 TSV 字段名为"转入金额"和"转出金额",返回的元组表示(in, out)绝对值。
+/// 任意字段缺失或解析失败返回 None。
+fn parse_amount_from_raw_data(raw_data: &str) -> Option<(Decimal, Decimal)> {
+    let v: serde_json::Value = serde_json::from_str(raw_data).ok()?;
+    let obj = v.as_object()?;
+    let in_amt = obj
+        .get("转入金额")
+        .and_then(|x| x.as_str())
+        .and_then(|s| parse_amount(s))?;
+    let out_amt = obj
+        .get("转出金额")
+        .and_then(|x| x.as_str())
+        .and_then(|s| parse_amount(s))?;
+    Some((in_amt, out_amt))
+}
+
+/// 对一批银行流水的轻量数据,正序遍历,计算每行的余额连续性状态。
+/// 返回 `id -> status` 映射,status 取值:
+/// - `"ok"`:本行余额与(prev + in - out)完全一致
+/// - `"mismatch"`:不一致
+/// - `"skip"`:无法计算(余额为空/缺转入或转出/无上一行)
+fn compute_balance_check_status(
+    rows: &[BalanceCheckRow],
+) -> std::collections::HashMap<i64, String> {
+    let mut out = std::collections::HashMap::with_capacity(rows.len());
+    let mut prev_balance: Option<Decimal> = None;
+
+    for row in rows {
+        let cur_balance = row.balance.as_deref().and_then(parse_amount);
+
+        let status = match (prev_balance, cur_balance) {
+            (Some(prev), Some(cur)) => {
+                if let Some((in_amt, out_amt)) = parse_amount_from_raw_data(&row.raw_data) {
+                    let expected = prev + in_amt - out_amt;
+                    if expected == cur {
+                        "ok".to_string()
+                    } else {
+                        "mismatch".to_string()
+                    }
+                } else {
+                    "skip".to_string()
+                }
+            }
+            _ => "skip".to_string(),
+        };
+
+        if let Some(b) = cur_balance {
+            prev_balance = Some(b);
+        }
+        out.insert(row.id, status);
+    }
+    out
+}
+
+/// 拉取某 source_type 下所有匹配过滤的轻量数据(仅银行流水)。
+///
+/// 用于计算余额连续性,需要全量正序遍历,因此不分页。
+fn fetch_balance_check_rows(
+    conn: &rusqlite::Connection,
+    source_type: Option<&str>,
+) -> Result<Vec<BalanceCheckRow>, String> {
+    let mut sql = String::from(
+        "SELECT sr.id, sr.balance, sr.raw_data
+         FROM source_records sr
+         JOIN source_types st ON sr.source_type_id = st.id
+         WHERE st.code = 'bank_flow'",
+    );
+    let params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    if let Some(t) = source_type {
+        if t == "bank_flow" {
+            // 已经在 WHERE 限定
+        } else {
+            // 其它 source_type 不需要计算
+            return Ok(Vec::new());
+        }
+    } else {
+        // 无 source_type 过滤:仍只算 bank_flow(WHERE 已限定)
+    }
+    sql.push_str(" ORDER BY sr.record_date ASC, sr.id ASC");
+
+    let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("查询余额校验数据失败: {e}"))?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(refs.iter()), |row| {
+            Ok(BalanceCheckRow {
+                id: row.get(0)?,
+                balance: row.get(1)?,
+                raw_data: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("查询余额校验数据失败: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("查询余额校验数据失败: {e}"))?;
+    Ok(rows)
+}
+
 pub fn get_raw_record_core(
     conn: &rusqlite::Connection,
     id: i64,
 ) -> Result<Option<RawRecordDetail>, String> {
-    let record = conn
+    let record_opt = conn
         .query_row(
             "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
-                    sr.record_no, sr.record_date, sr.amount_total, sr.currency, sr.counterpart_info,
+                    sr.record_no, sr.record_date, sr.amount_total, sr.balance, sr.currency, sr.counterpart_info,
                     sr.summary, sr.status, sr.created_at, sr.raw_data, ib.file_path
              FROM source_records sr
              JOIN source_types st ON sr.source_type_id = st.id
@@ -963,23 +1358,32 @@ pub fn get_raw_record_core(
                         record_no: row.get(6)?,
                         record_date: row.get(7)?,
                         amount_total: row.get(8)?,
-                        currency: row.get(9)?,
-                        counterpart_info: row.get(10)?,
-                        summary: row.get(11)?,
-                        status: row.get(12)?,
-                        created_at: row.get(13)?,
-                        file_path: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
+                        balance: row.get(9)?,
+                        currency: row.get(10)?,
+                        counterpart_info: row.get(11)?,
+                        summary: row.get(12)?,
+                        status: row.get(13)?,
+                        created_at: row.get(14)?,
+                        file_path: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                        balance_check_status: None,
                     },
-                    row.get::<_, String>(14)?,
+                    row.get::<_, String>(15)?,
                 ))
             },
         )
         .optional()
         .map_err(|e| format!("查询原始记录详情失败: {e}"))?;
 
-    let Some((record, raw_data)) = record else {
+    let Some((mut record, raw_data)) = record_opt else {
         return Ok(None);
     };
+
+    // 计算余额连续性(仅 bank_flow)
+    if record.source_type == "bank_flow" {
+        let check_rows = fetch_balance_check_rows(conn, Some("bank_flow"))?;
+        let map = compute_balance_check_status(&check_rows);
+        record.balance_check_status = map.get(&record.id).cloned();
+    }
 
     let entity_id = id.to_string();
     let mut stmt = conn
@@ -1034,6 +1438,46 @@ pub fn get_raw_record_core(
         attachments,
         audit_logs,
     }))
+}
+
+/// 自动生成数据汇总(骨架函数)。
+///
+/// 业务规则:数据汇总(`summary_flow`) 不允许用户手动导入,
+/// 而是由系统根据以下三项源数据自动派生:
+///   1. 银行流水(`bank_flow`)
+///   2. 工商商户 POS 流水(`pos_flow`)
+///   3. 微信聊天记录的说明信息(待 source_type 落地后启用)
+///
+/// 当前函数仅记录调用并返回占位结果;具体生成规则待后续迭代。
+/// 已生成的汇总行应写入 `source_records` 表(`source_type='summary_flow'`),
+/// 标记为系统生成,可被既有 raw_record_table / 对账 / 凭证生成流程复用。
+pub fn generate_summary_core(
+    conn: &rusqlite::Connection,
+    date_from: &str,
+    date_to: &str,
+) -> Result<GenerateSummaryResult, String> {
+    let _ = conn; // 占位:未来实现需在此打开事务并写入 source_records
+
+    // 校验日期参数
+    if date_from.trim().is_empty() || date_to.trim().is_empty() {
+        return Err("日期范围不能为空".to_string());
+    }
+    if date_from > date_to {
+        return Err(format!("起始日期 {date_from} 晚于结束日期 {date_to}"));
+    }
+
+    // 占位实现:当前不真正生成汇总行,仅返回空结果。
+    // 后续在此实现以下逻辑:
+    //   - 联表 bank_flow / pos_flow 按日期分组,聚合 Σ(转入-转出) 与 Σ(订单金额-手续费)
+    //   - 对每条待生成行写入 source_records(source_type_id=summary_flow, status='auto_generated')
+    //   - 微信备注单独查表合并;在本轮尚未落地,先跳过
+    Ok(GenerateSummaryResult {
+        date_from: date_from.to_string(),
+        date_to: date_to.to_string(),
+        generated_count: 0,
+        skipped_count: 0,
+        errors: Vec::new(),
+    })
 }
 
 pub fn reconcile_core(conn: &rusqlite::Connection, date: &str) -> Result<ReconcileResult, String> {
@@ -1746,11 +2190,9 @@ mod tests {
     fn test_import_summary_raw() {
         let conn = in_memory_company_conn();
         let path = sample_file("summary_raw.tsv");
-        let result = import_file_core(&conn, &path, None, None).expect("导入数据汇总失败");
-
-        assert_eq!(result.source_type, "summary_flow");
-        assert_eq!(result.row_count, 11);
-        assert_eq!(count_records(&conn, "summary_flow"), 11);
+        let err = import_file_core(&conn, &path, None, None).expect_err("数据汇总应被拒绝导入");
+        assert!(err.contains("不允许导入"), "实际错误: {err}");
+        assert_eq!(count_records(&conn, "summary_flow"), 0);
     }
 
     #[test]
@@ -1769,17 +2211,26 @@ mod tests {
         let conn = in_memory_company_conn();
         let files = scan_directory_core(&conn, &sample_dir()).expect("扫描目录失败");
 
+        // 数据汇总不允许导入,扫描时标记为 unsupported;
+        // 其它三类文件(bank/order/pos) 仍为 pending。
         let pending: Vec<_> = files.iter().filter(|f| f.status == "pending").collect();
-        assert_eq!(pending.len(), 4, "应检测到 4 个待导入文件");
+        assert_eq!(
+            pending.len(),
+            3,
+            "应检测到 3 个待导入文件(数据汇总是 unsupported)"
+        );
+
+        let unsupported: Vec<_> = files.iter().filter(|f| f.status == "unsupported").collect();
+        assert!(unsupported
+            .iter()
+            .any(|f| f.file_name == "summary_raw.tsv" && f.source_type == "summary_flow"));
+
         assert!(files
             .iter()
             .any(|f| f.file_name == "bank_raw.tsv" && f.source_type == "bank_flow"));
         assert!(files
             .iter()
             .any(|f| f.file_name == "order_raw.tsv" && f.source_type == "order_flow"));
-        assert!(files
-            .iter()
-            .any(|f| f.file_name == "summary_raw.tsv" && f.source_type == "summary_flow"));
         assert!(files
             .iter()
             .any(|f| f.file_name == "pos_raw.tsv" && f.source_type == "pos_flow"));
@@ -1812,5 +2263,453 @@ mod tests {
         import_file_core(&conn, &path, None, None).expect("首次导入失败");
         let err = import_file_core(&conn, &path, None, None).expect_err("重复导入应失败");
         assert!(err.contains("已导入"));
+    }
+
+    /// 写入临时 TSV,测试结束后删除。
+    fn write_temp_tsv(name: &str, content: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join("forgefin_raw_tests");
+        std::fs::create_dir_all(&dir).expect("创建临时目录失败");
+        let path = dir.join(name);
+        std::fs::write(&path, content).expect("写入临时 TSV 失败");
+        path
+    }
+
+    fn unique_temp_name(prefix: &str) -> String {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        format!("{prefix}_{nanos}.tsv")
+    }
+
+    /// 模拟"同一个订单流水分两次导出,日期范围重叠"。
+    /// 第一次导入 3 条,第二次导入 2 条(其中 1 条与第一次重叠)——
+    /// 期望第二次 inserted=1, skipped=1。
+    #[test]
+    fn test_overlapping_order_import_dedups_by_record_no() {
+        let conn = in_memory_company_conn();
+
+        let file_a = write_temp_tsv(
+            &unique_temp_name("order_a"),
+            "工行订单号\t商户实收金额\t交易时间\n\
+             ORD-001\t100.00\t2026-07-01 10:00:00\n\
+             ORD-002\t200.00\t2026-07-02 10:00:00\n\
+             ORD-003\t300.00\t2026-07-03 10:00:00\n",
+        );
+        let file_b = write_temp_tsv(
+            &unique_temp_name("order_b"),
+            "工行订单号\t商户实收金额\t交易时间\n\
+             ORD-002\t200.00\t2026-07-02 10:00:00\n\
+             ORD-004\t400.00\t2026-07-04 10:00:00\n",
+        );
+
+        let r1 = import_file_core(&conn, &file_a, None, None).expect("首次导入失败");
+        assert_eq!(r1.row_count, 3);
+        assert_eq!(r1.skipped_count, 0);
+
+        let r2 = import_file_core(&conn, &file_b, None, None).expect("二次导入应成功");
+        assert_eq!(r2.row_count, 1, "仅新订单 ORD-004 应入库");
+        assert_eq!(r2.skipped_count, 1, "重叠的 ORD-002 应被跳过");
+
+        // 总计仍为 4 条,无重复
+        assert_eq!(count_records(&conn, "order_flow"), 4);
+
+        // import_errors 应记录 1 条 duplicate_row
+        let err_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM import_errors WHERE field_name = 'duplicate_row'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("查询 import_errors 失败");
+        assert_eq!(err_count, 1);
+
+        let _ = std::fs::remove_file(&file_a);
+        let _ = std::fs::remove_file(&file_b);
+    }
+
+    /// 银行流水的 record_no 几乎全是占位符 `000000000`,
+    /// 因此不参与业务级去重 —— 应保证样本能完整入库,不被误伤。
+    #[test]
+    fn test_bank_flow_with_placeholder_record_no_imports_all_rows() {
+        let conn = in_memory_company_conn();
+
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_placeholder"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t摘要\n\
+             000000000\t2026-07-10 10:00:00\t安泊酒店\t0.00\t4552.00\t房费\n\
+             000000000\t2026-07-10 13:39:00\t明瑞科技\t0.00\t4800.00\t货款\n\
+             000000000\t2026-07-10 22:13:00\t银行\t0.00\t9.00\t跨行手续费\n",
+        );
+
+        let r = import_file_core(&conn, &bank, None, None).expect("银行流水应完整入库");
+        assert_eq!(r.row_count, 3);
+        assert_eq!(r.skipped_count, 0);
+        assert_eq!(count_records(&conn, "bank_flow"), 3);
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 数据汇总是由系统按银行流水/POS 流水/微信备注自动派生,不允许用户导入。
+    /// 此测试验证即便文件名不包含 "summary" 关键字,只要显式传入 summary_flow 也应被拒绝。
+    #[test]
+    fn test_summary_import_is_blocked() {
+        let conn = in_memory_company_conn();
+
+        // 文件名故意不含 "summary"/"汇总" 等关键字,但显式 source_type="summary_flow"
+        let file = write_temp_tsv(
+            &unique_temp_name("plain"),
+            "日期\t收据编号\t事由\t实际收入\t支出\t备注\n\
+             2026-07-10\tR001\t王浩然产康充值\t11970.00\t0.00\t微信\n",
+        );
+
+        let err = import_file_core(&conn, &file, Some("summary_flow"), None)
+            .expect_err("summary_flow 显式导入应被拒绝");
+        assert!(err.contains("不允许导入"), "实际错误: {err}");
+        assert_eq!(count_records(&conn, "summary_flow"), 0);
+
+        let _ = std::fs::remove_file(&file);
+    }
+
+    /// 银行流水导入后,source_records.balance 列应被正确填充。
+    #[test]
+    fn test_bank_flow_import_writes_balance_column() {
+        let conn = in_memory_company_conn();
+
+        // 连续性 OK 且首末差额 OK:
+        //   第 1 行: in=2000, out=500, balance=100000
+        //   第 2 行: in=500,  out=0,   balance=101500 (100000+2000-500+500-0=102000...见下)
+        // 重新设计:
+        //   第 1 行: in=0, out=0, balance=100000
+        //   第 2 行: in=1000, out=0, balance=101000
+        //     连续性: 100000 + 1000 - 0 = 101000 ✓
+        //   Σ(末-首) = 1000, Σ(转入-转出) = 1000 ✓
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_balance"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\t安泊酒店\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 13:39:00\t明瑞科技\t1000.00\t0.00\t101000.00\n",
+        );
+
+        let r = import_file_core(&conn, &bank, None, None).expect("导入失败");
+        assert_eq!(r.row_count, 2);
+        assert!(
+            r.balance_check_warning.is_none(),
+            "正常银行流水不应产生余额警告: {:?}",
+            r.balance_check_warning
+        );
+
+        let balances: Vec<String> = conn
+            .prepare("SELECT balance FROM source_records WHERE source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow') ORDER BY source_row_no")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(balances, vec!["100000.00", "101000.00"]);
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 余额连续性校验:文件被篡改时,差额行应写入 import_errors。
+    #[test]
+    fn test_bank_flow_balance_continuity_warning_on_tampered_file() {
+        let conn = in_memory_company_conn();
+
+        // 第二行的"余额"被改小 100.00,导致 prev + in - out != cur
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_tampered"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\t安泊酒店\t0.00\t1000.00\t100000.00\n\
+             000000000\t2026-07-10 13:39:00\t明瑞科技\t500.00\t0.00\t99500.00\n\
+             000000000\t2026-07-11 09:00:00\t明瑞科技\t0.00\t200.00\t99300.00\n",
+        );
+
+        let r = import_file_core(&conn, &bank, None, None).expect("导入失败");
+        assert_eq!(r.row_count, 3);
+        let warning = r.balance_check_warning.expect("应返回余额校验警告");
+        assert!(
+            warning.contains("余额不连续") || warning.contains("连续性"),
+            "warning={warning}"
+        );
+
+        let err_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM import_errors WHERE field_name = 'balance_discontinuity'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("查询 import_errors 失败");
+        assert_eq!(err_count, 1, "仅中间一行连续性失败");
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 首末余额差额自检:文件整体 Σ(转入-转出) 不等于 末-首 余额。
+    #[test]
+    fn test_bank_flow_first_last_balance_check_warns_on_mismatch() {
+        let conn = in_memory_company_conn();
+
+        // 首余额 100000,末余额 105000,差 5000
+        // 但 Σ(转入-转出) = (0-1000) + (1000-0) + (0-0) + (0-0) = 0
+        // → 首末差额自检触发
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_first_last"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t1000.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 12:00:00\tC\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 13:00:00\tD\t0.00\t0.00\t105000.00\n",
+        );
+
+        let r = import_file_core(&conn, &bank, None, None).expect("导入失败");
+        let warning = r.balance_check_warning.expect("应返回余额校验警告");
+        assert!(
+            warning.contains("首末余额差额") || warning.contains("Σ"),
+            "warning={warning}"
+        );
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 订单流水的导入不应触发任何余额校验。
+    #[test]
+    fn test_order_flow_has_no_balance_check() {
+        let conn = in_memory_company_conn();
+
+        let order = write_temp_tsv(
+            &unique_temp_name("order_no_balance"),
+            "工行订单号\t商户实收金额\t交易时间\n\
+             ORD-A\t100.00\t2026-07-10 10:00:00\n\
+             ORD-B\t200.00\t2026-07-11 10:00:00\n",
+        );
+
+        let r = import_file_core(&conn, &order, None, None).expect("导入失败");
+        assert_eq!(r.row_count, 2);
+        assert!(
+            r.balance_check_warning.is_none(),
+            "订单流水不应返回余额校验警告"
+        );
+
+        let _ = std::fs::remove_file(&order);
+    }
+
+    /// 数据汇总:即使显式传入 source_type,也不允许导入。
+    #[test]
+    fn test_summary_flow_explicit_import_rejected() {
+        let conn = in_memory_company_conn();
+        let order = write_temp_tsv(
+            &unique_temp_name("disguised_summary"),
+            "工行订单号\t商户实收金额\t交易时间\n\
+             ORD-A\t100.00\t2026-07-10 10:00:00\n",
+        );
+
+        // 显式传入 summary_flow,应被拒绝
+        let err = import_file_core(&conn, &order, Some("summary_flow"), None)
+            .expect_err("显式 summary_flow 导入应被拒绝");
+        assert!(err.contains("不允许导入"), "实际错误: {err}");
+
+        let _ = std::fs::remove_file(&order);
+    }
+
+    /// generate_summary_core 占位实现:返回空结果,不写入 source_records。
+    #[test]
+    fn test_generate_summary_core_returns_placeholder() {
+        let conn = in_memory_company_conn();
+
+        // 正常区间
+        let r = generate_summary_core(&conn, "2026-07-01", "2026-07-31").expect("生成失败");
+        assert_eq!(r.date_from, "2026-07-01");
+        assert_eq!(r.date_to, "2026-07-31");
+        assert_eq!(r.generated_count, 0);
+        assert!(r.errors.is_empty());
+
+        // 起始日期晚于结束日期
+        assert!(generate_summary_core(&conn, "2026-07-31", "2026-07-01").is_err());
+
+        // 空日期
+        assert!(generate_summary_core(&conn, "", "2026-07-01").is_err());
+        assert!(generate_summary_core(&conn, "2026-07-01", "  ").is_err());
+    }
+
+    /// 列显示偏好:无记录时返回默认值(全可见)。
+    #[test]
+    fn test_get_column_prefs_returns_default_when_empty() {
+        let conn = in_memory_company_conn();
+        let prefs =
+            crate::commands::ui_prefs::get_column_prefs_core(&conn, "bank_flow").expect("读取");
+        assert_eq!(prefs.source_type, "bank_flow");
+        for key in crate::commands::ui_prefs::COLUMN_KEYS {
+            assert_eq!(
+                prefs.columns.get(*key).copied(),
+                Some(true),
+                "默认应全可见,但 {key} 不是"
+            );
+        }
+    }
+
+    /// 列显示偏好:保存后再次读取应一致。
+    #[test]
+    fn test_save_and_reload_column_prefs() {
+        let conn = in_memory_company_conn();
+
+        // 关闭部分列
+        let mut cols = crate::commands::ui_prefs::default_columns();
+        cols.insert("balance".to_string(), false);
+        cols.insert("summary".to_string(), false);
+        crate::commands::ui_prefs::save_column_prefs_core(&conn, "bank_flow", &cols).expect("保存");
+
+        // 重新读取
+        let prefs =
+            crate::commands::ui_prefs::get_column_prefs_core(&conn, "bank_flow").expect("读取");
+        assert_eq!(prefs.columns.get("balance"), Some(&false));
+        assert_eq!(prefs.columns.get("summary"), Some(&false));
+        // 其它列保持默认 true
+        assert_eq!(prefs.columns.get("amount_total"), Some(&true));
+    }
+
+    /// 列显示偏好:全量提交语义。再次保存时覆盖之前的全集合。
+    #[test]
+    fn test_save_column_prefs_overwrites() {
+        let conn = in_memory_company_conn();
+
+        // 第一次保存:关闭 balance
+        let mut cols1 = crate::commands::ui_prefs::default_columns();
+        cols1.insert("balance".to_string(), false);
+        crate::commands::ui_prefs::save_column_prefs_core(&conn, "order_flow", &cols1)
+            .expect("保存");
+
+        // 第二次保存:全部默认(开启 balance)
+        let cols2 = crate::commands::ui_prefs::default_columns();
+        crate::commands::ui_prefs::save_column_prefs_core(&conn, "order_flow", &cols2)
+            .expect("保存");
+
+        let prefs =
+            crate::commands::ui_prefs::get_column_prefs_core(&conn, "order_flow").expect("读取");
+        // 第二次提交后 balance 应恢复 true
+        assert_eq!(prefs.columns.get("balance"), Some(&true));
+    }
+
+    /// 列显示偏好:不同 source_type 的配置互不影响。
+    #[test]
+    fn test_column_prefs_isolated_per_source_type() {
+        let conn = in_memory_company_conn();
+
+        let mut cols = crate::commands::ui_prefs::default_columns();
+        cols.insert("balance".to_string(), false);
+
+        crate::commands::ui_prefs::save_column_prefs_core(&conn, "bank_flow", &cols).expect("保存");
+
+        // order_flow 仍应保持默认
+        let order_prefs =
+            crate::commands::ui_prefs::get_column_prefs_core(&conn, "order_flow").expect("读取");
+        assert_eq!(order_prefs.columns.get("balance"), Some(&true));
+    }
+
+    /// 余额连续性计算:导入连续银行流水,逐行计算应全部 ok。
+    #[test]
+    fn test_balance_check_status_ok() {
+        let conn = in_memory_company_conn();
+        // 第 1 行 in=0, out=0, balance=100000
+        // 第 2 行 in=1000, out=0, balance=101000
+        //   expected = 100000 + 1000 - 0 = 101000 ✓
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_ok"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t101000.00\n",
+        );
+        import_file_core(&conn, &bank, None, None).expect("导入失败");
+
+        let rows = fetch_balance_check_rows(&conn, Some("bank_flow")).expect("fetch");
+        let map = compute_balance_check_status(&rows);
+        let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(map.get(&ids[0]).map(|s| s.as_str()), Some("skip")); // 第 1 行无 prev
+        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("ok"));
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 余额连续性计算:第 2 行余额被改,与 expected 不一致 → mismatch。
+    #[test]
+    fn test_balance_check_status_mismatch() {
+        let conn = in_memory_company_conn();
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_mismatch"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t99999.00\n",
+        );
+        import_file_core(&conn, &bank, None, None).expect("导入失败");
+
+        let rows = fetch_balance_check_rows(&conn, Some("bank_flow")).expect("fetch");
+        let map = compute_balance_check_status(&rows);
+        let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(map.get(&ids[0]).map(|s| s.as_str()), Some("skip"));
+        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("mismatch"));
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 余额连续性计算:raw_data 中缺转入或转出 → skip。
+    #[test]
+    fn test_balance_check_status_skip_when_amounts_missing() {
+        let conn = in_memory_company_conn();
+        // 第 1 行有完整数据,第 2 行缺转出金额(空列)
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_skip"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t\t101000.00\n",
+        );
+        import_file_core(&conn, &bank, None, None).expect("导入失败");
+
+        let rows = fetch_balance_check_rows(&conn, Some("bank_flow")).expect("fetch");
+        let map = compute_balance_check_status(&rows);
+        let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("skip"));
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// list_raw_records_core 应当把 balance_check_status 写入 bank_flow 记录。
+    #[test]
+    fn test_list_raw_records_includes_balance_check_status_for_bank_flow() {
+        let conn = in_memory_company_conn();
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_list"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t101000.00\n",
+        );
+        import_file_core(&conn, &bank, None, None).expect("导入失败");
+
+        let page = list_raw_records_core(
+            &conn,
+            &RawRecordFilter {
+                source_type: Some("bank_flow".to_string()),
+                batch_id: None,
+                page: 1,
+                page_size: 50,
+            },
+        )
+        .expect("查询失败");
+
+        // page 内按 record_date DESC 排序,但 balance_check_status 应已填好
+        let statuses: Vec<Option<String>> = page
+            .items
+            .iter()
+            .map(|r| r.balance_check_status.clone())
+            .collect();
+        assert!(
+            statuses.iter().all(|s| s.is_some()),
+            "所有银行流水行应填写 status"
+        );
+        // 其中第 1 行(更早时间)skip,第 2 行(更晚时间)ok(因为是上一行的延续)
+        // 顺序按 record_date DESC:第 1 行(11:00)= ok,第 2 行(10:00)= skip
+        assert_eq!(statuses[0], Some("ok".to_string()));
+        assert_eq!(statuses[1], Some("skip".to_string()));
+
+        let _ = std::fs::remove_file(&bank);
     }
 }

@@ -1,24 +1,35 @@
+use std::collections::BTreeMap;
+
 use leptos::prelude::*;
 
 use crate::components::source::raw_record_table::{
-    RawRecordFilterState, RawRecordTableBody, RawRecordToolbar,
+    default_columns, RawRecordFilterState, RawRecordTableBody, RawRecordToolbar,
 };
 use crate::components::source::record_detail::RecordDetail;
 use crate::components::table::pagination::Pagination;
-use crate::ipc::{self, RawRecordFilter};
+use crate::ipc::{self, ColumnPrefs, RawRecordFilter, RawRecordPage};
+
+const SOURCE_TYPE: &str = "order_flow";
 
 #[component]
 pub fn OrderFlow() -> impl IntoView {
     let (selected_id, set_selected_id) = signal(Option::<i64>::None);
 
-    let records = LocalResource::new(|| async move {
-        ipc::list_raw_records(&RawRecordFilter {
-            source_type: Some("order_flow".to_string()),
+    let initial = LocalResource::new(|| async move {
+        let records = ipc::list_raw_records(&RawRecordFilter {
+            source_type: Some(SOURCE_TYPE.to_string()),
             batch_id: None,
             page: 1,
             page_size: 50,
         })
-        .await
+        .await;
+        let prefs = ipc::get_column_prefs(SOURCE_TYPE.to_string())
+            .await
+            .unwrap_or_else(|_| ColumnPrefs {
+                source_type: SOURCE_TYPE.to_string(),
+                columns: default_columns(),
+            });
+        (records, prefs)
     });
 
     let detail = LocalResource::new(move || {
@@ -35,9 +46,10 @@ pub fn OrderFlow() -> impl IntoView {
         <div class="page-content">
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
                 {move || Suspend::new(async move {
-                    match records.await {
+                    let (records_res, prefs) = initial.await;
+                    match records_res {
                         Ok(p) => {
-                            let state = RawRecordFilterState::new(&p.items, false);
+                            let state = build_state(&p, prefs);
                             view! {
                                 <div class="page-toolbar">
                                     <RawRecordToolbar state=state.clone() />
@@ -67,4 +79,17 @@ pub fn OrderFlow() -> impl IntoView {
             </Suspense>
         </div>
     }
+}
+
+fn build_state(p: &RawRecordPage, prefs: ColumnPrefs) -> RawRecordFilterState {
+    let source_type = SOURCE_TYPE.to_string();
+    let on_change = Callback::new(move |cols: BTreeMap<String, bool>| {
+        let st = source_type.clone();
+        leptos::task::spawn_local(async move {
+            if let Err(e) = ipc::save_column_prefs(st, cols).await {
+                web_sys::console::warn_1(&format!("保存列显示偏好失败: {e}").into());
+            }
+        });
+    });
+    RawRecordFilterState::with_columns(&p.items, SOURCE_TYPE, prefs.columns, Some(on_change))
 }

@@ -1,7 +1,48 @@
+use std::collections::BTreeMap;
+
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::ipc::RawRecord;
+
+/// 稳定列标识清单(与后端 `ui_prefs::COLUMN_KEYS` 保持一致)。
+pub const COLUMN_KEYS: &[&str] = &[
+    "source_type",
+    "source_file_name",
+    "source_row_no",
+    "record_no",
+    "record_date",
+    "amount_total",
+    "balance",
+    "counterpart_info",
+    "summary",
+    "status",
+];
+
+/// 列 key → 中文标签,供工具条/表头使用。
+pub fn column_label(key: &str) -> &'static str {
+    match key {
+        "source_type" => "来源类型",
+        "source_file_name" => "来源文件",
+        "source_row_no" => "行号",
+        "record_no" => "业务单号",
+        "record_date" => "日期",
+        "amount_total" => "金额",
+        "balance" => "余额",
+        "counterpart_info" => "对方信息",
+        "summary" => "摘要",
+        "status" => "状态",
+        _ => "?",
+    }
+}
+
+/// 全部列默认可见(账套首次打开时使用)。
+pub fn default_columns() -> BTreeMap<String, bool> {
+    COLUMN_KEYS
+        .iter()
+        .map(|k| ((*k).to_string(), true))
+        .collect()
+}
 
 /// Filter / search + keyboard-navigation state shared between the toolbar and table body.
 ///
@@ -9,6 +50,7 @@ use crate::ipc::RawRecord;
 /// [`RawRecordToolbar`] and [`RawRecordTableBody`].
 #[derive(Clone)]
 pub struct RawRecordFilterState {
+    pub source_type: String,
     pub query_text: ReadSignal<String>,
     pub set_query_text: WriteSignal<String>,
     pub mode: ReadSignal<&'static str>,
@@ -16,19 +58,33 @@ pub struct RawRecordFilterState {
     pub display_rows: Memo<Vec<RawRecord>>,
     pub display_ids: Memo<Vec<i64>>,
     pub total_all: usize,
-    pub show_source: bool,
+    pub columns: ReadSignal<BTreeMap<String, bool>>,
+    pub set_columns: WriteSignal<BTreeMap<String, bool>>,
+    pub on_columns_change: Option<Callback<BTreeMap<String, bool>>>,
     pub tbody_ref: NodeRef<leptos::html::Tbody>,
     pub input_ref: NodeRef<leptos::html::Input>,
 }
 
 impl RawRecordFilterState {
-    pub fn new(rows: &[RawRecord], show_source: bool) -> Self {
+    /// 构造过滤状态(默认全部列可见)。
+    pub fn new(rows: &[RawRecord], source_type: impl Into<String>) -> Self {
+        Self::with_columns(rows, source_type, default_columns(), None)
+    }
+
+    /// 构造过滤状态(指定初始列可见集合)。
+    pub fn with_columns(
+        rows: &[RawRecord],
+        source_type: impl Into<String>,
+        columns: BTreeMap<String, bool>,
+        on_columns_change: Option<Callback<BTreeMap<String, bool>>>,
+    ) -> Self {
         let total_all = rows.len();
         let tbody_ref = NodeRef::<leptos::html::Tbody>::new();
         let input_ref = NodeRef::<leptos::html::Input>::new();
 
         let (query_text, set_query_text) = signal(String::new());
         let (mode, set_mode) = signal("filter");
+        let (cols, set_cols) = signal(columns);
 
         let keywords = Memo::new(move |_| {
             let raw = query_text.get();
@@ -41,7 +97,6 @@ impl RawRecordFilterState {
                 .collect()
         });
 
-        let show_source_for_filter = show_source;
         let rows_owned: Vec<RawRecord> = rows.to_vec();
         let display_rows = Memo::new(move |_| {
             let kws = keywords.get();
@@ -49,10 +104,11 @@ impl RawRecordFilterState {
             if kws.is_empty() || m == "search" {
                 return rows_owned.clone();
             }
+            let show_source = cols.get().get("source_type").copied().unwrap_or(false);
             rows_owned
                 .clone()
                 .into_iter()
-                .filter(|r| row_matches_keywords(r, &kws, show_source_for_filter))
+                .filter(|r| row_matches_keywords(r, &kws, show_source))
                 .collect::<Vec<_>>()
         });
 
@@ -60,6 +116,7 @@ impl RawRecordFilterState {
             Memo::new(move |_| display_rows.get().iter().map(|r| r.id).collect::<Vec<_>>());
 
         Self {
+            source_type: source_type.into(),
             query_text,
             set_query_text,
             mode,
@@ -67,7 +124,9 @@ impl RawRecordFilterState {
             display_rows,
             display_ids,
             total_all,
-            show_source,
+            columns: cols,
+            set_columns: set_cols,
+            on_columns_change,
             tbody_ref,
             input_ref,
         }
@@ -80,6 +139,17 @@ impl RawRecordFilterState {
     pub fn focus_input(&self) {
         if let Some(input) = self.input_ref.get() {
             let _ = input.focus();
+        }
+    }
+
+    /// 切换某列可见性(同时触发 on_columns_change 回调,用于落库)。
+    pub fn toggle_column(&self, key: &str) {
+        let mut next = self.columns.get();
+        let cur = next.get(key).copied().unwrap_or(true);
+        next.insert(key.to_string(), !cur);
+        self.set_columns.set(next.clone());
+        if let Some(cb) = &self.on_columns_change {
+            cb.run(next);
         }
     }
 
@@ -122,8 +192,10 @@ impl RawRecordFilterState {
     }
 }
 
-/// Independent toolbar (filter / search input + mode toggle).
-/// Render this above the grid; it is a flex-shrink:0 bar.
+/// 工具条:过滤/搜索 + 列设置(下拉)。
+///
+/// `on_columns_change` 用于在用户切换列可见性时持久化到后端。
+/// 通常由页面层在构造 state 时填入,内部 state.toggle_column 触发。
 #[component]
 pub fn RawRecordToolbar(state: RawRecordFilterState) -> impl IntoView {
     let RawRecordFilterState {
@@ -133,6 +205,7 @@ pub fn RawRecordToolbar(state: RawRecordFilterState) -> impl IntoView {
         set_mode,
         input_ref,
         total_all,
+        columns,
         ..
     } = state.clone();
 
@@ -192,6 +265,70 @@ pub fn RawRecordToolbar(state: RawRecordFilterState) -> impl IntoView {
         }
     };
 
+    // 列设置下拉(开关)
+    let (column_menu_open, set_column_menu_open) = signal(false);
+    let toggle_menu = move |_: leptos::ev::MouseEvent| {
+        set_column_menu_open.update(|v| *v = !*v);
+    };
+
+    // 全局 mousedown 监听:点下拉以外的任何位置时关闭菜单。
+    // - 通过 create_effect 监听 column_menu_open:仅在打开时挂监听、关闭时移除。
+    // - 下拉 DOM 通过 stop_propagation 阻止 mousedown 冒泡到 document,
+    //   实现"点下拉内部不关"。
+    // - 持有 js_sys::Function 句柄(由 Closure::as_ref() 转换),方便 close 时
+    //   removeEventListener 找到同一对象引用。
+    {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let set_open_signal = set_column_menu_open;
+        let active_listener: Rc<RefCell<Option<js_sys::Function>>> = Rc::new(RefCell::new(None));
+        Effect::new(move |_| {
+            // 状态变 false:清除挂载的 listener
+            if !column_menu_open.get() {
+                if let Some(f) = active_listener.borrow_mut().take() {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = document.remove_event_listener_with_callback("mousedown", &f);
+                        }
+                    }
+                    // f 在这里被 Drop,但因为 Closure 已被 forget() 转移给 JS,
+                    // 没有对应 Rust 端 closure,JS 端 listener 引用会随 document GC
+                }
+                return;
+            }
+
+            // 状态变 true:挂监听(若已存在则先移除旧的)
+            if let Some(old) = active_listener.borrow_mut().take() {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = document.remove_event_listener_with_callback("mousedown", &old);
+                    }
+                }
+            }
+
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            let Some(document) = window.document() else {
+                return;
+            };
+            let set_open_clone = set_open_signal;
+            let closure: wasm_bindgen::closure::Closure<dyn FnMut(web_sys::MouseEvent)> =
+                wasm_bindgen::closure::Closure::new(move |_ev: web_sys::MouseEvent| {
+                    set_open_clone.set(false);
+                });
+            // 取出 JS 端函数句柄(独立于 Closure 生命周期的 JsValue,Send+Sync)
+            let func: js_sys::Function = closure.as_ref().clone().dyn_into().unwrap();
+            let _ = document.add_event_listener_with_callback("mousedown", &func);
+            // closure 转移给 JS(避免 rust 端 Drop 时 invalidate JS 回调)
+            closure.forget();
+            *active_listener.borrow_mut() = Some(func);
+        });
+    }
+
+    let visible_count = move || columns.get().values().filter(|v| **v).count();
+    let total_cols = COLUMN_KEYS.len();
+
     view! {
         <div class="data-table-bar">
             <div class="flex items-center gap-1 flex-shrink-0">
@@ -214,6 +351,44 @@ pub fn RawRecordToolbar(state: RawRecordFilterState) -> impl IntoView {
                 }
             />
             <span class="data-table-bar-hint">{hint}</span>
+
+            <div
+                class="relative flex-shrink-0"
+                on:mousedown=move |ev| ev.stop_propagation()
+            >
+                <button
+                    class="btn btn-sm btn-outline flex items-center gap-1"
+                    on:click=toggle_menu
+                >
+                    "列设置"
+                    <span class="text-12 text-tertiary">
+                        {move || format!("({}/{})", visible_count(), total_cols)}
+                    </span>
+                </button>
+                <Show when=move || column_menu_open.get()>
+                    <div class="absolute right-0 top-full mt-1 z-10 bg-surface border border-border rounded shadow-md p-2 min-w-44">
+                        {COLUMN_KEYS.iter().map(|key| {
+                            let key_str = (*key).to_string();
+                            let label = column_label(key);
+                            let key_for_toggle = key_str.clone();
+                            let key_for_checked = key_str.clone();
+                            let state_for_checked = state.clone();
+                            let state_for_toggle = state.clone();
+                            view! {
+                                <label class="flex items-center gap-2 px-2 py-1 text-13 hover:bg-surface-alt rounded cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked=move || state_for_checked.columns.get().get(&key_for_checked).copied().unwrap_or(true)
+                                        on:change=move |_| state_for_toggle.toggle_column(&key_for_toggle)
+                                    />
+                                    <span>{label}</span>
+                                </label>
+                            }
+                        }).collect::<Vec<_>>()}
+                    </div>
+                </Show>
+            </div>
+
             <button class="btn btn-sm btn-outline" on:click=clear_query>"✕"</button>
         </div>
     }
@@ -232,10 +407,12 @@ pub fn RawRecordTableBody(
         mode,
         display_rows,
         tbody_ref,
-        show_source,
+        columns,
         set_query_text,
         ..
     } = state.clone();
+
+    let state_for_keys = state.clone();
 
     let selected_id_for_next = selected_id;
     let set_selected_id_for_next = set_selected_id;
@@ -272,17 +449,36 @@ pub fn RawRecordTableBody(
                 <table>
                     <thead>
                         <tr>
-                            <Show when=move || show_source>
+                            <Show when=move || state_for_keys.columns.get().get("source_type").copied().unwrap_or(true)>
                                 <th>"来源类型"</th>
                             </Show>
-                            <th>"来源文件"</th>
-                            <th class="data-table-num">"行号"</th>
-                            <th>"业务单号"</th>
-                            <th class="data-table-num">"日期"</th>
-                            <th class="data-table-num">"金额"</th>
-                            <th>"对方信息"</th>
-                            <th>"摘要"</th>
-                            <th>"状态"</th>
+                            <Show when=move || state_for_keys.columns.get().get("source_file_name").copied().unwrap_or(true)>
+                                <th>"来源文件"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("source_row_no").copied().unwrap_or(true)>
+                                <th class="data-table-num">"行号"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("record_no").copied().unwrap_or(true)>
+                                <th>"业务单号"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("record_date").copied().unwrap_or(true)>
+                                <th class="data-table-num">"日期"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("amount_total").copied().unwrap_or(true)>
+                                <th class="data-table-num">"金额"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("balance").copied().unwrap_or(true)>
+                                <th class="data-table-num">"余额"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("counterpart_info").copied().unwrap_or(true)>
+                                <th>"对方信息"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("summary").copied().unwrap_or(true)>
+                                <th>"摘要"</th>
+                            </Show>
+                            <Show when=move || state_for_keys.columns.get().get("status").copied().unwrap_or(true)>
+                                <th>"状态"</th>
+                            </Show>
                         </tr>
                     </thead>
                     <tbody node_ref=tbody_ref>
@@ -291,7 +487,7 @@ pub fn RawRecordTableBody(
                                 row=row
                                 selected=selected_id
                                 set_selected=set_selected_id
-                                show_source_type=show_source
+                                columns=columns
                                 query=query_text
                             />
                         </For>
@@ -330,6 +526,9 @@ fn row_matches_keywords(row: &RawRecord, keywords: &[String], show_source: bool)
         if let Some(ref v) = row.amount_total {
             parts.push(v);
         }
+        if let Some(ref v) = row.balance {
+            parts.push(v);
+        }
         if let Some(ref v) = row.counterpart_info {
             parts.push(v);
         }
@@ -346,14 +545,21 @@ fn RowItem(
     row: RawRecord,
     selected: ReadSignal<Option<i64>>,
     set_selected: WriteSignal<Option<i64>>,
-    show_source_type: bool,
+    columns: ReadSignal<BTreeMap<String, bool>>,
     query: ReadSignal<String>,
 ) -> impl IntoView {
     let id = row.id;
     let is_active = move || selected.get() == Some(id);
-    let status_label = status_cn(&row.status);
+    // 余额连续性检查结果 → 行 class
+    let balance_class = match row.balance_check_status.as_deref() {
+        Some("ok") => "balance-ok",
+        Some("mismatch") => "balance-mismatch",
+        Some("skip") | None => "balance-skip",
+        _ => "balance-skip",
+    };
     view! {
         <tr
+            class=(balance_class, true)
             class=("selected", is_active)
             tabindex="0"
             on:click=move |_| set_selected.set(Some(id))
@@ -363,20 +569,48 @@ fn RowItem(
                 }
             }
         >
-            {show_source_type.then(|| view! { <td>{highlight_text(&row.source_type_name, query.get())}</td> })}
-            <td>{highlight_text(&row.source_file_name, query.get())}</td>
-            <td class="data-table-num">{row.source_row_no}</td>
-            <td>{highlight_text(&row.record_no.as_deref().unwrap_or("—"), query.get())}</td>
-            <td class="data-table-num">{highlight_text(&row.record_date.as_deref().unwrap_or("—"), query.get())}</td>
-            <td class="data-table-num">{highlight_text(&row.amount_total.as_deref().unwrap_or("—"), query.get())}</td>
-            <td>{highlight_text(&row.counterpart_info.as_deref().unwrap_or("—"), query.get())}</td>
-            <td>{highlight_text(&row.summary.as_deref().unwrap_or("—"), query.get())}</td>
-            <td>
-                <span class={format!("text-13 {}", status_class(&row.status))}>
-                    {status_label}
-                </span>
-            </td>
+            <Show when=move || columns.get().get("source_type").copied().unwrap_or(true)>
+                <td>{highlight_text(&row.source_type_name, query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("source_file_name").copied().unwrap_or(true)>
+                <td>{highlight_text(&row.source_file_name, query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("source_row_no").copied().unwrap_or(true)>
+                <td class="data-table-num">{row.source_row_no}</td>
+            </Show>
+            <Show when=move || columns.get().get("record_no").copied().unwrap_or(true)>
+                <td>{highlight_text(&row.record_no.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("record_date").copied().unwrap_or(true)>
+                <td class="data-table-num">{highlight_text(&row.record_date.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("amount_total").copied().unwrap_or(true)>
+                <td class="data-table-num">{highlight_text(&row.amount_total.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("balance").copied().unwrap_or(true)>
+                <td class="data-table-num balance-cell">{highlight_text(&row.balance.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("counterpart_info").copied().unwrap_or(true)>
+                <td>{highlight_text(&row.counterpart_info.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("summary").copied().unwrap_or(true)>
+                <td>{highlight_text(&row.summary.as_deref().unwrap_or("—"), query.get())}</td>
+            </Show>
+            <Show when=move || columns.get().get("status").copied().unwrap_or(true)>
+                <td>
+                    <StatusCell status=row.status.clone() />
+                </td>
+            </Show>
         </tr>
+    }
+}
+
+#[component]
+fn StatusCell(status: String) -> impl IntoView {
+    let label = status_cn(&status);
+    let class_name = status_class(&status);
+    view! {
+        <span class={format!("text-13 {class_name}")}>{label}</span>
     }
 }
 

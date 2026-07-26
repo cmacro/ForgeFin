@@ -30,10 +30,11 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
     };
 
     view! {
-        <div class="card flex flex-col min-h-0">
-            <div class="card-header">
+        <div class="card flex flex-col min-h-0 h-full overflow-hidden">
+            <div class="card-header flex-shrink-0">
                 <span class="card-title">"原始记录详情"</span>
             </div>
+            <div class="flex-1 min-h-0 overflow-y-auto">
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"请选择一条记录"</div> }>
                 {let detail = detail.clone();
                  move || {
@@ -53,6 +54,7 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
                                     <DetailField label="业务单号" value=r.record_no.unwrap_or("—".to_string()) />
                                     <DetailField label="日期" value=r.record_date.unwrap_or("—".to_string()) />
                                     <DetailField label="金额" value=r.amount_total.unwrap_or("—".to_string()) />
+                                    <DetailField label="余额" value=r.balance.unwrap_or("—".to_string()) />
                                     <DetailField label="币种" value=r.currency />
                                     <DetailField label="状态" value=status_cn(&r.status) />
                                 </div>
@@ -96,6 +98,7 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
                     }
                 }}
             </Suspense>
+            </div>
         </div>
     }
 }

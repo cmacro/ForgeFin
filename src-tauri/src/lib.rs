@@ -62,10 +62,14 @@ pub fn run() {
             raw::import_raw_file_cmd,
             raw::list_raw_records_cmd,
             raw::get_raw_record_cmd,
+            raw::generate_summary_cmd,
             raw::reconcile_cmd,
             raw::list_reconciliation_items_cmd,
             raw::review_summary_cmd,
             raw::list_raw_audit_logs_cmd,
+            // ui prefs (列显示等)
+            ui_prefs::get_column_prefs_cmd,
+            ui_prefs::save_column_prefs_cmd,
             // backup
             backup::backup_company_cmd,
             backup::backup_system_cmd,

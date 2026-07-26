@@ -218,10 +218,12 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             record_no       TEXT,
             record_date     TEXT,
             amount_total    TEXT,
+            balance         TEXT,
             currency        TEXT DEFAULT 'CNY',
             counterpart_info TEXT,
             summary         TEXT,
             raw_data        TEXT NOT NULL,
+            row_hash        TEXT,
             status          TEXT NOT NULL DEFAULT 'pending',
             created_at      TEXT NOT NULL,
             FOREIGN KEY (source_type_id) REFERENCES source_types(id)
@@ -233,6 +235,22 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             ON source_records(source_type_id);
         CREATE INDEX IF NOT EXISTS idx_source_records_date
             ON source_records(record_date);
+        CREATE INDEX IF NOT EXISTS idx_source_records_row_hash
+            ON source_records(source_type_id, row_hash);
+
+        -- 行级去重:订单/POS 来源以业务单号(record_no)为主键指纹。
+        -- 排除银行流水的占位符 `000000000`(分析文档 §4.1:凭证号不可用),
+        -- 否则真实 POS 清算行会被大量误判为重复。
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_source_records_by_record_no
+            ON source_records(source_type_id, record_no)
+            WHERE record_no IS NOT NULL
+              AND record_no != ''
+              AND record_no != '000000000';
+
+        -- 行级去重兜底:同一导入批次、同一文件、同一行号绝不重复入库。
+        -- 跨批次允许同名同 row_no 的记录(便于多次重新导入同一文件)。
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_source_records_batch_file_row
+            ON source_records(import_batch_id, source_file_name, source_row_no);
 
         -- 原始凭证对账汇总(按日期)
         CREATE TABLE IF NOT EXISTS transaction_summaries (
@@ -307,9 +325,53 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
 
         CREATE INDEX IF NOT EXISTS idx_import_errors_batch
             ON import_errors(import_batch_id);
+
+        -- UI 列显示偏好(账套 × 来源类型)
+        -- 每条记录表示某来源类型(银行流水/订单流水/POS流水/数据汇总)下,
+        -- 某个列的可见性。column_key 稳定标识列名,visible=0/1。
+        -- 单一账套 + 来源类型下,各 column_key 唯一(UNIQUE)。
+        CREATE TABLE IF NOT EXISTS ui_column_prefs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type     TEXT NOT NULL,
+            column_key      TEXT NOT NULL,
+            visible         INTEGER NOT NULL DEFAULT 1,
+            updated_at      TEXT NOT NULL,
+            UNIQUE (source_type, column_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ui_column_prefs_source
+            ON ui_column_prefs(source_type);
         ",
     )
     .map_err(|e| format!("公司库建表失败: {e}"))?;
+
+    // 轻量迁移:为旧库补齐 source_records.row_hash 列
+    let has_row_hash: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('source_records') WHERE name = 'row_hash'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !has_row_hash {
+        conn.execute_batch("ALTER TABLE source_records ADD COLUMN row_hash TEXT;")
+            .map_err(|e| format!("为 source_records 添加 row_hash 列失败: {e}"))?;
+    }
+
+    // 轻量迁移:为旧库补齐 source_records.balance 列(银行流水余额)
+    let has_balance: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('source_records') WHERE name = 'balance'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !has_balance {
+        conn.execute_batch("ALTER TABLE source_records ADD COLUMN balance TEXT;")
+            .map_err(|e| format!("为 source_records 添加 balance 列失败: {e}"))?;
+    }
 
     // 初始化默认原始凭证来源类型
     init_source_types(conn)?;

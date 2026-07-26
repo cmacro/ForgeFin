@@ -351,7 +351,7 @@ impl NavKey {
             NavKey::BankFlow => "查看导入的银行流水记录",
             NavKey::OrderFlow => "查看导入的订单流水记录",
             NavKey::ChatRecords => "查看微信聊天上报的原始凭证",
-            NavKey::DataSummary => "查看数据汇总的详细记录",
+            NavKey::DataSummary => "查看或生成数据汇总(自动派生,无需导入)",
             NavKey::SystemSettings => "账套、用户与备份管理",
             _ => "",
         }

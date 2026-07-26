@@ -72,7 +72,7 @@ pub fn ImportUploader(
             <div class="mt-4 p-3 bg-surface rounded border border-border">
                 <div class="flex items-center gap-2 text-13 text-secondary">
                     <FileUp size=14 />
-                    <span>"支持 .tsv / .csv / .xlsx,文件名包含 bank/order/pos/summary 等关键字以识别来源类型。"</span>
+                    <span>"支持 .tsv / .csv / .xlsx,文件名包含 bank/order/pos 等关键字以识别来源类型。数据汇总是由系统按银行流水、POS 流水与微信备注自动生成,无需导入。"</span>
                 </div>
             </div>
         </div>

@@ -198,8 +198,12 @@ fn ImportCenter(
                     {move || {
                         let r = import_result.get().unwrap_or_default();
                         let error_count = r.errors.len();
-                        let errors_for_show = r.errors.clone();
                         let errors_for_list = r.errors.clone();
+                        let warnings: Vec<(String, String)> = r.imported.iter()
+                            .filter_map(|item| item.balance_check_warning.as_ref().map(|w| (item.file_name.clone(), w.clone())))
+                            .collect();
+                        let has_errors = !errors_for_list.is_empty();
+                        let has_warnings = !warnings.is_empty();
                         view! {
                             <div class="mt-3 p-3 bg-surface rounded border border-border text-13">
                                 <div class="flex gap-4">
@@ -207,10 +211,20 @@ fn ImportCenter(
                                     <span class="text-tertiary">{format!("已跳过 {}", r.skipped.len())}</span>
                                     <span class="text-danger">{format!("失败 {}", error_count)}</span>
                                 </div>
-                                <Show when=move || !errors_for_show.is_empty()>
+                                <Show when=move || has_errors>
                                     <ul class="mt-2 text-danger space-y-1">
                                         {errors_for_list.iter().map(|err| view! { <li>{err.clone()}</li> }).collect::<Vec<_>>()}
                                     </ul>
+                                </Show>
+                                <Show when=move || has_warnings>
+                                    <div class="mt-2 text-warning">
+                                        <div class="font-medium">"余额校验警告"</div>
+                                        <ul class="space-y-1">
+                                            {warnings.iter().map(|(fname, msg)| view! {
+                                                <li>{format!("{fname}: {msg}")}</li>
+                                            }).collect::<Vec<_>>()}
+                                        </ul>
+                                    </div>
                                 </Show>
                             </div>
                         }
@@ -296,10 +310,22 @@ fn ImportSingleFile() -> impl IntoView {
             </Show>
             <Show when=move || result.get().is_some()>
                 {move || {
-                    result.get().map(|r| view! {
-                        <div class="mt-2 text-13 text-success">
-                            {format!("导入成功: {} ({} 行, batch_id={})", r.file_name, r.row_count, r.batch_id)}
-                        </div>
+                    result.get().map(|r| {
+                        let warn = r.balance_check_warning.clone();
+                        let skipped = r.skipped_count;
+                        view! {
+                            <div class="mt-2 text-13">
+                                <div class="text-success">
+                                    {format!("导入成功: {} ({} 行, batch_id={})", r.file_name, r.row_count, r.batch_id)}
+                                </div>
+                                {(skipped > 0i32).then(|| view! {
+                                    <div class="text-warning mt-1">{format!("跳过 {} 条重复行", skipped)}</div>
+                                })}
+                                {warn.map(|w| view! {
+                                    <div class="text-warning mt-1">{format!("余额校验警告: {w}")}</div>
+                                })}
+                            </div>
+                        }
                     })
                 }}
             </Show>
@@ -376,7 +402,6 @@ fn RecordsLibrary() -> impl IntoView {
                             <option value="bank_flow">"银行流水"</option>
                             <option value="order_flow">"订单流水"</option>
                             <option value="pos_flow">"POS流水"</option>
-                            <option value="summary_flow">"数据汇总"</option>
                         </select>
                     </div>
                     <button
@@ -423,10 +448,6 @@ fn record_search_fields() -> Vec<SearchField> {
                     SelectOption {
                         value: "pos_flow",
                         label: "POS流水",
-                    },
-                    SelectOption {
-                        value: "summary_flow",
-                        label: "数据汇总",
                     },
                 ],
                 placeholder: Some("全部"),

@@ -4,6 +4,7 @@ pub mod company;
 pub mod contact;
 pub mod raw;
 pub mod session;
+pub mod ui_prefs;
 pub mod user;
 pub mod voucher;
 
