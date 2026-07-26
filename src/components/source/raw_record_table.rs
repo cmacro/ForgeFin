@@ -3,129 +3,161 @@ use wasm_bindgen::JsCast;
 
 use crate::ipc::RawRecord;
 
+/// Filter / search + keyboard-navigation state shared between the toolbar and table body.
+///
+/// Create once with [`RawRecordFilterState::new`] then pass clones to
+/// [`RawRecordToolbar`] and [`RawRecordTableBody`].
+#[derive(Clone)]
+pub struct RawRecordFilterState {
+    pub query_text: ReadSignal<String>,
+    pub set_query_text: WriteSignal<String>,
+    pub mode: ReadSignal<&'static str>,
+    pub set_mode: WriteSignal<&'static str>,
+    pub display_rows: Memo<Vec<RawRecord>>,
+    pub display_ids: Memo<Vec<i64>>,
+    pub total_all: usize,
+    pub show_source: bool,
+    pub tbody_ref: NodeRef<leptos::html::Tbody>,
+    pub input_ref: NodeRef<leptos::html::Input>,
+}
+
+impl RawRecordFilterState {
+    pub fn new(rows: &[RawRecord], show_source: bool) -> Self {
+        let total_all = rows.len();
+        let tbody_ref = NodeRef::<leptos::html::Tbody>::new();
+        let input_ref = NodeRef::<leptos::html::Input>::new();
+
+        let (query_text, set_query_text) = signal(String::new());
+        let (mode, set_mode) = signal("filter");
+
+        let keywords = Memo::new(move |_| {
+            let raw = query_text.get();
+            if raw.is_empty() {
+                return Vec::<String>::new();
+            }
+            raw.split_whitespace()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_lowercase())
+                .collect()
+        });
+
+        let show_source_for_filter = show_source;
+        let rows_owned: Vec<RawRecord> = rows.to_vec();
+        let display_rows = Memo::new(move |_| {
+            let kws = keywords.get();
+            let m = mode.get();
+            if kws.is_empty() || m == "search" {
+                return rows_owned.clone();
+            }
+            rows_owned
+                .clone()
+                .into_iter()
+                .filter(|r| row_matches_keywords(r, &kws, show_source_for_filter))
+                .collect::<Vec<_>>()
+        });
+
+        let display_ids =
+            Memo::new(move |_| display_rows.get().iter().map(|r| r.id).collect::<Vec<_>>());
+
+        Self {
+            query_text,
+            set_query_text,
+            mode,
+            set_mode,
+            display_rows,
+            display_ids,
+            total_all,
+            show_source,
+            tbody_ref,
+            input_ref,
+        }
+    }
+
+    pub fn total_after(&self) -> usize {
+        self.display_rows.get().len()
+    }
+
+    pub fn focus_input(&self) {
+        if let Some(input) = self.input_ref.get() {
+            let _ = input.focus();
+        }
+    }
+
+    pub fn select_next(
+        &self,
+        selected_id: ReadSignal<Option<i64>>,
+        set_selected_id: WriteSignal<Option<i64>>,
+    ) {
+        let current = selected_id.get();
+        let ids = self.display_ids.get();
+        let pos = current.and_then(|c| ids.iter().position(|x| *x == c));
+        let next = match pos {
+            Some(i) if i + 1 < ids.len() => i + 1,
+            Some(_) => 0,
+            None => 0,
+        };
+        if !ids.is_empty() {
+            set_selected_id.set(Some(ids[next]));
+            focus_row(self.tbody_ref.clone(), next);
+        }
+    }
+
+    pub fn select_prev(
+        &self,
+        selected_id: ReadSignal<Option<i64>>,
+        set_selected_id: WriteSignal<Option<i64>>,
+    ) {
+        let current = selected_id.get();
+        let ids = self.display_ids.get();
+        let pos = current.and_then(|c| ids.iter().position(|x| *x == c));
+        let prev = match pos {
+            Some(0) => ids.len().saturating_sub(1),
+            Some(i) => i - 1,
+            None => 0,
+        };
+        if !ids.is_empty() {
+            set_selected_id.set(Some(ids[prev]));
+            focus_row(self.tbody_ref.clone(), prev);
+        }
+    }
+}
+
+/// Independent toolbar (filter / search input + mode toggle).
+/// Render this above the grid; it is a flex-shrink:0 bar.
 #[component]
-pub fn RawRecordTable(
-    rows: Vec<RawRecord>,
-    selected_id: ReadSignal<Option<i64>>,
-    set_selected_id: WriteSignal<Option<i64>>,
-    #[prop(optional)] show_source_type: Option<bool>,
-) -> impl IntoView {
-    let show_source = show_source_type.unwrap_or(true);
-    let total_all = rows.len();
-    let tbody_ref = NodeRef::<leptos::html::Tbody>::new();
-    let input_ref = NodeRef::<leptos::html::Input>::new();
+pub fn RawRecordToolbar(state: RawRecordFilterState) -> impl IntoView {
+    let RawRecordFilterState {
+        query_text,
+        set_query_text,
+        mode,
+        set_mode,
+        input_ref,
+        total_all,
+        ..
+    } = state.clone();
 
-    let (query_text, set_query_text) = signal(String::new());
-    let (mode, set_mode) = signal("filter");
-
-    let keywords = Memo::new(move |_| {
-        let raw = query_text.get();
-        if raw.is_empty() {
-            return Vec::<String>::new();
-        }
-        raw.split_whitespace()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_lowercase())
-            .collect()
-    });
-
-    let display_rows = Memo::new(move |_| {
-        let kws = keywords.get();
-        let m = mode.get();
-        if kws.is_empty() || m == "search" {
-            return rows.clone();
-        }
-        rows.clone()
-            .into_iter()
-            .filter(|r| row_matches_keywords(r, &kws, show_source))
-            .collect::<Vec<_>>()
-    });
-
-    let display_ids =
-        Memo::new(move |_| display_rows.get().iter().map(|r| r.id).collect::<Vec<_>>());
-
-    let select_next = {
-        let tbody_ref = tbody_ref.clone();
-        move || {
-            let current = selected_id.get();
-            let ids = display_ids.get();
-            let pos = current.and_then(|c| ids.iter().position(|x| *x == c));
-            let next = match pos {
-                Some(i) if i + 1 < ids.len() => i + 1,
-                Some(_) => 0,
-                None => 0,
-            };
-            if !ids.is_empty() {
-                set_selected_id.set(Some(ids[next]));
-                focus_row(tbody_ref.clone(), next);
-            }
-        }
-    };
-
-    let select_prev = {
-        let tbody_ref = tbody_ref.clone();
-        move || {
-            let current = selected_id.get();
-            let ids = display_ids.get();
-            let pos = current.and_then(|c| ids.iter().position(|x| *x == c));
-            let prev = match pos {
-                Some(0) => ids.len().saturating_sub(1),
-                Some(i) => i - 1,
-                None => 0,
-            };
-            if !ids.is_empty() {
-                set_selected_id.set(Some(ids[prev]));
-                focus_row(tbody_ref.clone(), prev);
-            }
-        }
-    };
-
-    let focus_input = {
-        let input_ref = input_ref.clone();
-        move || {
-            if let Some(input) = input_ref.get() {
-                let _ = input.focus();
-            }
-        }
-    };
-
-    let on_container_keydown = move |ev: leptos::ev::KeyboardEvent| {
-        let key = ev.key();
-        let ctrl = ev.ctrl_key() || ev.meta_key();
-
-        if (ctrl && key == "f") || key == "/" {
-            ev.prevent_default();
-            focus_input();
-            return;
-        }
-
-        if key == "Escape" {
+    let clear_query = {
+        let state = state.clone();
+        move |_: leptos::ev::MouseEvent| {
             set_query_text.set(String::new());
-            return;
-        }
-
-        if key == "ArrowDown" {
-            ev.prevent_default();
-            select_next();
-        } else if key == "ArrowUp" {
-            ev.prevent_default();
-            select_prev();
+            state.focus_input();
         }
     };
 
-    let clear_query = move |_: leptos::ev::MouseEvent| {
-        set_query_text.set(String::new());
-        focus_input();
+    let switch_filter = {
+        let state = state.clone();
+        move |_: leptos::ev::MouseEvent| {
+            set_mode.set("filter");
+            state.focus_input();
+        }
     };
 
-    let switch_filter = move |_: leptos::ev::MouseEvent| {
-        set_mode.set("filter");
-        focus_input();
-    };
-
-    let switch_search = move |_: leptos::ev::MouseEvent| {
-        set_mode.set("search");
-        focus_input();
+    let switch_search = {
+        let state = state.clone();
+        move |_: leptos::ev::MouseEvent| {
+            set_mode.set("search");
+            state.focus_input();
+        }
     };
 
     let is_filter = move || mode.get() == "filter";
@@ -144,43 +176,98 @@ pub fn RawRecordTable(
             "btn btn-outline btn-sm"
         }
     };
-    let total_after = move || display_rows.get().len();
+
+    let state_for_hint = state.clone();
+    let hint = move || {
+        let m = mode.get();
+        if m == "filter" {
+            let t = state_for_hint.total_after();
+            if t == total_all {
+                String::new()
+            } else {
+                format!("{} / {} 条", t, total_all)
+            }
+        } else {
+            String::new()
+        }
+    };
 
     view! {
-        <div class="data-table flex flex-col min-h-0 flex-1">
-            <div class="data-table-bar">
-                <div class="flex items-center gap-1 flex-shrink-0">
-                    <button class=filter_class on:click=switch_filter>"过滤"</button>
-                    <button class=search_class on:click=switch_search>"查找"</button>
-                </div>
-                <input
-                    node_ref=input_ref
-                    class="data-table-bar-input"
-                    type="text"
-                    placeholder=move || {
-                        if is_filter() { "输入关键词过滤（空格分隔多关键词）隐藏不匹配行" } else { "输入关键词查找（空格分隔多关键词）高亮匹配文本" }
-                    }
-                    prop:value=query_text
-                    on:input=move |ev| set_query_text.set(event_target_value(&ev))
-                    on:keydown=move |ev| {
-                        if ev.key() == "Escape" {
-                            set_query_text.set(String::new());
-                        }
-                    }
-                />
-                <span class="data-table-bar-hint">
-                    {move || {
-                        let m = mode.get();
-                        if m == "filter" {
-                            let t = total_after();
-                            if t == total_all { String::new() } else { format!("{} / {} 条", t, total_all) }
-                        } else {
-                            String::new()
-                        }
-                    }}
-                </span>
-                <button class="btn btn-sm btn-outline" on:click=clear_query>"✕"</button>
+        <div class="data-table-bar">
+            <div class="flex items-center gap-1 flex-shrink-0">
+                <button class=filter_class on:click=switch_filter>"过滤"</button>
+                <button class=search_class on:click=switch_search>"查找"</button>
             </div>
+            <input
+                node_ref=input_ref
+                class="data-table-bar-input"
+                type="text"
+                placeholder=move || {
+                    if is_filter() { "输入关键词过滤（空格分隔多关键词）隐藏不匹配行" } else { "输入关键词查找（空格分隔多关键词）高亮匹配文本" }
+                }
+                prop:value=query_text
+                on:input=move |ev| set_query_text.set(event_target_value(&ev))
+                on:keydown=move |ev| {
+                    if ev.key() == "Escape" {
+                        set_query_text.set(String::new());
+                    }
+                }
+            />
+            <span class="data-table-bar-hint">{hint}</span>
+            <button class="btn btn-sm btn-outline" on:click=clear_query>"✕"</button>
+        </div>
+    }
+}
+
+/// Scrollable table body. Render this inside the grid's left column; it fills
+/// available height and scrolls internally.
+#[component]
+pub fn RawRecordTableBody(
+    state: RawRecordFilterState,
+    selected_id: ReadSignal<Option<i64>>,
+    set_selected_id: WriteSignal<Option<i64>>,
+) -> impl IntoView {
+    let RawRecordFilterState {
+        query_text,
+        mode,
+        display_rows,
+        tbody_ref,
+        show_source,
+        set_query_text,
+        ..
+    } = state.clone();
+
+    let selected_id_for_next = selected_id;
+    let set_selected_id_for_next = set_selected_id;
+    let on_container_keydown = move |ev: leptos::ev::KeyboardEvent| {
+        let key = ev.key();
+        let ctrl = ev.ctrl_key() || ev.meta_key();
+
+        if (ctrl && key == "f") || key == "/" {
+            ev.prevent_default();
+            state.focus_input();
+            return;
+        }
+
+        if key == "Escape" {
+            set_query_text.set(String::new());
+            return;
+        }
+
+        if key == "ArrowDown" {
+            ev.prevent_default();
+            state.select_next(selected_id_for_next, set_selected_id_for_next);
+        } else if key == "ArrowUp" {
+            ev.prevent_default();
+            state.select_prev(selected_id_for_next, set_selected_id_for_next);
+        }
+    };
+
+    let total_after = move || display_rows.get().len();
+    let _ = mode.get();
+
+    view! {
+        <div class="data-table data-table-compact data-table-nowrap flex flex-col min-h-0 flex-1">
             <div class="flex-1 overflow-auto" tabindex="-1" on:keydown=on_container_keydown>
                 <table>
                     <thead>
@@ -214,7 +301,8 @@ pub fn RawRecordTable(
                     if total_after() == 0 {
                         view! {
                             <div class="text-center py-40 text-tertiary">"暂无原始记录"</div>
-                        }.into_any()
+                        }
+                            .into_any()
                     } else {
                         view! { <></> }.into_any()
                     }

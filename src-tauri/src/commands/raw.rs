@@ -393,7 +393,7 @@ fn parse_and_insert_records(
         if line.is_empty() {
             continue;
         }
-        let row_no = idx as i32 + 2; // 1-based, 第 1 行是表头
+        let row_no = idx as i32 + 1; // 1-based data row (header already consumed)
 
         let values: Vec<String> = line.split('\t').map(|s| s.trim().to_string()).collect();
         let mut map = HashMap::<String, String>::new();

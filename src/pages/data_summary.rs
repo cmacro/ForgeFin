@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 
-use crate::components::source::raw_record_table::RawRecordTable;
+use crate::components::source::raw_record_table::{
+    RawRecordFilterState, RawRecordTableBody, RawRecordToolbar,
+};
 use crate::components::source::record_detail::RecordDetail;
 use crate::components::table::pagination::Pagination;
 use crate::ipc::{self, RawRecordFilter};
@@ -31,32 +33,38 @@ pub fn DataSummary() -> impl IntoView {
 
     view! {
         <div class="page-content">
-            <div class="page-grid-detail">
-                <div class="flex flex-col min-h-0">
-                    <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || Suspend::new(async move {
-                            match records.await {
-                                Ok(p) => view! {
-                                    <RawRecordTable
-                                        rows=p.items.clone()
+            <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
+                {move || Suspend::new(async move {
+                    match records.await {
+                        Ok(p) => {
+                            let state = RawRecordFilterState::new(&p.items, true);
+                            view! {
+                                <div class="page-toolbar">
+                                    <RawRecordToolbar state=state.clone() />
+                                </div>
+                                <div class="page-grid-detail">
+                                    <RawRecordTableBody
+                                        state=state
                                         selected_id=selected_id
                                         set_selected_id=set_selected_id
                                     />
-                                    <div class="border-t border-border-light">
-                                        <Pagination total=p.total current=p.page page_size=p.page_size />
+                                    <div class="detail-panel-responsive">
+                                        <RecordDetail detail=detail />
                                     </div>
-                                }.into_any(),
-                                Err(e) => view! {
-                                    <div class="login-error">{format!("加载失败: {e}")}</div>
-                                }.into_any(),
+                                </div>
+                                <div class="page-status-bar">
+                                    <Pagination total=p.total current=p.page page_size=p.page_size />
+                                </div>
                             }
-                        })}
-                    </Suspense>
-                </div>
-                <div class="detail-panel-responsive">
-                    <RecordDetail detail=detail />
-                </div>
-            </div>
+                                .into_any()
+                        }
+                        Err(e) => view! {
+                            <div class="login-error">{format!("加载失败: {e}")}</div>
+                        }
+                            .into_any(),
+                    }
+                })}
+            </Suspense>
         </div>
     }
 }

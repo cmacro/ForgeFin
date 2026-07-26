@@ -26,6 +26,9 @@
     background: var(--color-surface-alt);
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   .data-table tbody td {
@@ -95,11 +98,18 @@
   }
 
   .data-table-compact thead th {
-    padding: 8px 12px;
+    padding: 6px 12px;
   }
 
   .data-table-compact tbody td {
-    padding: 8px 12px;
+    padding: 6px 12px;
+  }
+
+  .data-table-nowrap tbody td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
   }
 
   .data-table-num {
