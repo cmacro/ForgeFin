@@ -1,10 +1,14 @@
 pub mod accounts;
 pub mod audit_log;
+pub mod bank_flow;
+pub mod chat_records;
 pub mod company_management;
 pub mod contacts;
 pub mod dashboard;
+pub mod data_summary;
 pub mod general_ledger;
 pub mod login;
+pub mod order_flow;
 pub mod placeholder;
 pub mod raw_data;
 pub mod reconciliation;

@@ -71,7 +71,7 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
                                     <Show when=move || file_content.get().is_some()>
                                         <div class="mt-2">
                                             <div class="text-13 text-secondary mb-1">"源文件内容"</div>
-                                            <pre class="bg-surface p-2 rounded text-12 overflow-auto" style="max-height: 300px;">
+                                            <pre class="detail-code-block bg-surface p-2 rounded text-12">
                                                 {move || file_content.get().unwrap_or_default()}
                                             </pre>
                                         </div>
@@ -79,8 +79,8 @@ pub fn RecordDetail(detail: LocalResource<Option<RawRecordDetail>>) -> impl Into
                                 </div>
                                 <div class="border-t border-border p-3">
                                     <div class="text-13 text-secondary mb-2">"原始数据 (JSON)"</div>
-                                    <pre class="bg-surface p-2 rounded text-12 overflow-auto" style="max-height: 200px;">
-                                        {d.raw_data}
+                                    <pre class="detail-code-block-sm bg-surface p-2 rounded text-12">
+                                        {format_json(&d.raw_data)}
                                     </pre>
                                 </div>
                                 {attachments_view(d.attachments.clone())}
@@ -160,7 +160,7 @@ fn audit_logs_view(logs: Vec<AuditLogEntry>) -> impl IntoView {
                 {logs.into_iter().map(|log| {
                     view! {
                         <li class="log-entry">
-                            <span class="log-entry-dot" style="background: var(--color-brand)"></span>
+                            <span class="log-entry-dot bg-brand"></span>
                             <div class="log-entry-title">{action_cn(&log.action)}</div>
                             <div class="log-entry-meta">
                                 <span class="text-primary font-medium">
@@ -187,4 +187,11 @@ fn action_cn(action: &str) -> String {
         _ => action,
     }
     .to_string()
+}
+
+fn format_json(raw: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(raw)
+        .ok()
+        .and_then(|v| serde_json::to_string_pretty(&v).ok())
+        .unwrap_or_else(|| raw.to_string())
 }

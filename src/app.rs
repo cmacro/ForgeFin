@@ -5,11 +5,15 @@ use crate::components::layout::shell::AppShell;
 use crate::nav::{NavKey, NavState};
 use crate::pages::accounts::Accounts;
 use crate::pages::audit_log::AuditLog;
+use crate::pages::bank_flow::BankFlow;
+use crate::pages::chat_records::ChatRecords;
 use crate::pages::company_management::CompanyManagement;
 use crate::pages::contacts::Contacts;
 use crate::pages::dashboard::Dashboard;
+use crate::pages::data_summary::DataSummary;
 use crate::pages::general_ledger::GeneralLedger;
 use crate::pages::login::Login;
+use crate::pages::order_flow::OrderFlow;
 use crate::pages::placeholder::Placeholder;
 use crate::pages::raw_data::RawData;
 use crate::pages::reconciliation::Reconciliation;
@@ -91,6 +95,10 @@ fn MainShell() -> impl IntoView {
                 NavKey::RawData => view! { <RawData /> }.into_any(),
                 NavKey::Reconciliation => view! { <Reconciliation /> }.into_any(),
                 NavKey::AuditLog => view! { <AuditLog /> }.into_any(),
+                NavKey::BankFlow => view! { <BankFlow /> }.into_any(),
+                NavKey::OrderFlow => view! { <OrderFlow /> }.into_any(),
+                NavKey::ChatRecords => view! { <ChatRecords /> }.into_any(),
+                NavKey::DataSummary => view! { <DataSummary /> }.into_any(),
                 NavKey::SystemSettings => view! { <Settings /> }.into_any(),
                 NavKey::CompanyManagement => view! { <CompanyManagement /> }.into_any(),
             }}

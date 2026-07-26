@@ -38,12 +38,60 @@
     border-bottom: none;
   }
 
+  .data-table tbody tr:nth-child(even) {
+    background: var(--color-surface-alt);
+  }
+
   .data-table tbody tr:hover {
     background: var(--color-surface-hover);
   }
 
   .data-table tbody tr.selected {
     background: var(--color-surface-active);
+  }
+
+  .data-table-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border-light);
+    background: var(--color-surface-alt);
+  }
+
+  .data-table-bar-icon {
+    font-size: 12px;
+    color: var(--color-tertiary);
+    flex-shrink: 0;
+  }
+
+  .data-table-bar-input {
+    flex: 1;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-primary);
+    outline: none;
+  }
+
+  .data-table-bar-input:focus {
+    border-color: var(--color-brand);
+  }
+
+  .data-table-bar-hint {
+    font-size: 12px;
+    color: var(--color-tertiary);
+    flex-shrink: 0;
+  }
+
+  .search-highlight {
+    background: var(--color-warning-soft, #fff7e8);
+    color: var(--color-primary);
+    border-radius: 2px;
+    padding: 0 2px;
   }
 
   .data-table-compact thead th {

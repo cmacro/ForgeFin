@@ -76,6 +76,45 @@ The following skills must be applied based on the task type.
 
 ---
 
+## Theme System Rules
+
+All visual styling MUST use semantic design tokens from `src/forgefin-theme/styles/`. Never use raw Tailwind color classes directly.
+
+**Semantic tokens (always prefer these):**
+
+| Intent | Token Class | Examples |
+|--------|-------------|----------|
+| Text | `text-primary`, `text-secondary`, `text-tertiary`, `text-disabled` | Titles, descriptions, metadata |
+| Text (status) | `text-success`, `text-warning`, `text-danger`, `text-info`, `text-brand` | Status indicators, links |
+| Background | `bg-surface`, `bg-surface-alt`, `bg-surface-hover`, `bg-brand`, `bg-border`, `bg-main` | Cards, page backgrounds, hover |
+| Border | `border-border`, `border-border-light`, `border-surface`, `border-brand` | Card outlines, separators |
+| Font size | `text-12`, `text-13` | Small labels, helper text |
+| Numbers | `text-num`, `text-money` | Monetary values, tabular figures |
+
+**Layout classes from theme (prefer over raw Tailwind):**
+- `.page-grid` — two-column responsive grid (use instead of `grid grid-cols-2 gap-4`)
+- `.page-header` — header with title + actions
+- `.page-content` — flex column container
+- `.card`, `.card-header`, `.card-title`, `.card-body`, `.card-footer` — card containers
+- `.data-table`, `.data-table-num`, `.pagination` — table layout
+- `.btn`, `.btn-primary`, `.btn-outline`, `.btn-sm` — buttons
+- `.form-field`, `.form-label`, `.form-input` — form controls
+- `.tag-brand`, `.tag-success`, `.tag-draft`, `.tag-pending`, `.tag-posted` — status tags
+- `.empty-state`, `.empty-state-title`, `.empty-state-desc` — empty placeholders
+
+**Forbidden:**
+```html
+<!-- Never use raw color classes: -->
+bg-white bg-slate-50 bg-gray-100 text-gray-900 text-slate-700 border-gray-200
+
+<!-- Always use semantic tokens: -->
+bg-surface bg-surface-alt text-primary text-secondary border-border
+```
+
+Tailwind layout classes (`flex`, `gap-*`, `p-*`, `m-*`, `items-center`, etc.) are acceptable for spacing/layout since `--spacing: 1px` is configured in the theme. Colors, backgrounds, and borders must always use the semantic token classes above.
+
+---
+
 ## Coding Rules
 
 Follow existing project patterns and Rust/Leptos best practices.

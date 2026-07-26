@@ -15,6 +15,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(Mutex::new(DbState::new()))
         .manage(std::sync::Mutex::new(commands::session::SessionState::new()))
         .invoke_handler(tauri::generate_handler![

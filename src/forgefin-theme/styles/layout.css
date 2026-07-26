@@ -143,6 +143,29 @@
     }
   }
 
+  .page-grid-detail {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (min-width: 1024px) {
+    .page-grid-detail {
+      grid-template-columns: 1fr 380px;
+    }
+  }
+
+  @media (max-width: 1199px) {
+    .detail-panel-responsive {
+      display: none;
+    }
+    .page-grid-detail:has(.detail-panel-responsive) {
+      grid-template-columns: 1fr;
+    }
+  }
+
   /* ===========================
      Todo List
   =========================== */

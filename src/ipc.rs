@@ -503,7 +503,7 @@ pub struct RawRecordFilter {
     pub page_size: i32,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RawRecord {
     pub id: i64,
     pub source_type: String,

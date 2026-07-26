@@ -23,6 +23,10 @@ pub enum NavKey {
     RawData,
     Reconciliation,
     AuditLog,
+    BankFlow,
+    OrderFlow,
+    ChatRecords,
+    DataSummary,
     CompanyManagement,
     SystemSettings,
 }
@@ -151,6 +155,34 @@ pub fn nav_tree() -> Vec<NavItem> {
                     route: "/raw-data/audit-log",
                     children: None,
                 },
+                NavItem {
+                    key: NavKey::BankFlow,
+                    label: "银行流水",
+                    icon: "landmark",
+                    route: "/raw-data/bank-flow",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::OrderFlow,
+                    label: "订单流水",
+                    icon: "shopping-cart",
+                    route: "/raw-data/order-flow",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::ChatRecords,
+                    label: "聊天记录",
+                    icon: "message-square",
+                    route: "/raw-data/chat-records",
+                    children: None,
+                },
+                NavItem {
+                    key: NavKey::DataSummary,
+                    label: "数据汇总",
+                    icon: "file-text",
+                    route: "/raw-data/data-summary",
+                    children: None,
+                },
             ]),
         },
         NavItem {
@@ -230,7 +262,7 @@ impl NavState {
     pub fn new() -> Self {
         let active = RwSignal::new(NavKey::VoucherManagement);
         let collapsed = RwSignal::new(false);
-        let expanded = RwSignal::new(vec![NavKey::VoucherManagement]);
+        let expanded = RwSignal::new(vec![NavKey::VoucherManagement, NavKey::RawData]);
         Self {
             active,
             collapsed,
@@ -289,6 +321,10 @@ impl NavKey {
             NavKey::RawData => "原始凭证",
             NavKey::Reconciliation => "对账中心",
             NavKey::AuditLog => "审计日志",
+            NavKey::BankFlow => "银行流水",
+            NavKey::OrderFlow => "订单流水",
+            NavKey::ChatRecords => "聊天记录",
+            NavKey::DataSummary => "数据汇总",
             NavKey::CompanyManagement => "账套管理",
             NavKey::SystemSettings => "系统设置",
         }
@@ -312,6 +348,10 @@ impl NavKey {
             NavKey::RawData => "导入并管理原始凭证文件",
             NavKey::Reconciliation => "原始凭证自动对账与差异审核",
             NavKey::AuditLog => "查看原始凭证与对账操作日志",
+            NavKey::BankFlow => "查看导入的银行流水记录",
+            NavKey::OrderFlow => "查看导入的订单流水记录",
+            NavKey::ChatRecords => "查看微信聊天上报的原始凭证",
+            NavKey::DataSummary => "查看数据汇总的详细记录",
             NavKey::SystemSettings => "账套、用户与备份管理",
             _ => "",
         }
