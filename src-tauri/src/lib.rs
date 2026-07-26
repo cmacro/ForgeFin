@@ -67,6 +67,8 @@ pub fn run() {
             raw::list_reconciliation_items_cmd,
             raw::review_summary_cmd,
             raw::list_raw_audit_logs_cmd,
+            raw::confirm_balance_batch_cmd,
+            raw::unconfirm_balance_batch_cmd,
             // ui prefs (列显示等)
             ui_prefs::get_column_prefs_cmd,
             ui_prefs::save_column_prefs_cmd,

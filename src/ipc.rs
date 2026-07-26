@@ -526,12 +526,16 @@ pub struct RawRecord {
     pub created_at: String,
     pub file_path: String,
     /// 余额连续性校验结果:
-    /// - `"ok"`:本行余额与(上一行余额 + 转入 - 转出)一致
+    /// - `"ok"`:本行余额与(上一行余额 + 转入 - 转出)严格相等
     /// - `"mismatch"`:不一致
     /// - `"skip"`:无法计算(余额缺失/无上一行等)
     /// - `None`:不适用(非 bank_flow)
     #[serde(default)]
     pub balance_check_status: Option<String>,
+    /// 余额连续性财务确认时间(ISO8601 字符串)。非 NULL 时表示该行已被财务人员确认,
+    /// 即便 `balance_check_status` 为 `mismatch` 也不在 UI 展示红底告警。
+    #[serde(default)]
+    pub balance_confirmed_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -629,6 +633,28 @@ pub async fn list_raw_records(filter: &RawRecordFilter) -> Result<RawRecordPage,
 
 pub async fn get_raw_record(id: i64) -> Result<Option<RawRecordDetail>, String> {
     invoke("get_raw_record_cmd", &serde_json::json!({"id": id})).await
+}
+
+/// 财务人员对某一批次银行流水的余额连续性进行整体确认。
+///
+/// 业务规则:Decimal 严格加减不应出现四舍五入误差,任何"余额不平"都视为真问题;
+/// 财务核对后(可能是跨日补录、合并入账、银行分笔误差等)才用本接口批量确认。
+/// 返回本次影响的行数。
+pub async fn confirm_balance_batch(batch_id: i64) -> Result<i64, String> {
+    invoke(
+        "confirm_balance_batch_cmd",
+        &serde_json::json!({"batchId": batch_id}),
+    )
+    .await
+}
+
+/// 撤销对某一批次银行流水余额连续性的整体确认(把 `balance_confirmed_at` 清空)。
+pub async fn unconfirm_balance_batch(batch_id: i64) -> Result<i64, String> {
+    invoke(
+        "unconfirm_balance_batch_cmd",
+        &serde_json::json!({"batchId": batch_id}),
+    )
+    .await
 }
 
 /// UI 列显示偏好(账套级 × 来源类型)。

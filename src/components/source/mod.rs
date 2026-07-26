@@ -1,3 +1,4 @@
+pub mod bank_flow_balance_bar;
 pub mod import_file_detail;
 pub mod import_file_list;
 pub mod import_uploader;

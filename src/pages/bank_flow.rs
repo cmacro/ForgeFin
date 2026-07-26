@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use leptos::prelude::*;
 
+use crate::components::source::bank_flow_balance_bar::BankFlowBalanceBar;
 use crate::components::source::raw_record_table::{
     default_columns, RawRecordFilterState, RawRecordTableBody, RawRecordToolbar,
 };
@@ -43,6 +44,10 @@ pub fn BankFlow() -> impl IntoView {
         }
     });
 
+    let refresh_records = move || {
+        initial.refetch();
+    };
+
     view! {
         <div class="page-content">
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
@@ -51,9 +56,14 @@ pub fn BankFlow() -> impl IntoView {
                     match records_res {
                         Ok(p) => {
                             let state = build_state(&p, prefs);
+                            let items = p.items.clone();
                             view! {
                                 <div class="page-toolbar">
                                     <RawRecordToolbar state=state.clone() />
+                                    <BankFlowBalanceBar
+                                        items=items
+                                        on_changed=Callback::new(move |_| refresh_records())
+                                    />
                                 </div>
                                 <div class="page-grid-detail">
                                     <RawRecordTableBody

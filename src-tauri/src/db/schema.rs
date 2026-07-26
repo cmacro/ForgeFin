@@ -226,6 +226,7 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             row_hash        TEXT,
             status          TEXT NOT NULL DEFAULT 'pending',
             created_at      TEXT NOT NULL,
+            balance_confirmed_at TEXT,
             FOREIGN KEY (source_type_id) REFERENCES source_types(id)
         );
 
@@ -371,6 +372,20 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
     if !has_balance {
         conn.execute_batch("ALTER TABLE source_records ADD COLUMN balance TEXT;")
             .map_err(|e| format!("为 source_records 添加 balance 列失败: {e}"))?;
+    }
+
+    // 轻量迁移:为旧库补齐 source_records.balance_confirmed_at 列(银行流水余额连续性人工确认)
+    let has_balance_confirmed_at: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('source_records') WHERE name = 'balance_confirmed_at'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !has_balance_confirmed_at {
+        conn.execute_batch("ALTER TABLE source_records ADD COLUMN balance_confirmed_at TEXT;")
+            .map_err(|e| format!("为 source_records 添加 balance_confirmed_at 列失败: {e}"))?;
     }
 
     // 初始化默认原始凭证来源类型

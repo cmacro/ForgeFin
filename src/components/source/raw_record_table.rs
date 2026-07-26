@@ -551,15 +551,23 @@ fn RowItem(
     let id = row.id;
     let is_active = move || selected.get() == Some(id);
     // 余额连续性检查结果 → 行 class
-    let balance_class = match row.balance_check_status.as_deref() {
-        Some("ok") => "balance-ok",
-        Some("mismatch") => "balance-mismatch",
-        Some("skip") | None => "balance-skip",
-        _ => "balance-skip",
+    // 注意:view! 中 class=(name, bool) 是"按 bool 切换 name 类名"的语法,
+    // 这里的 name 必须是字面量字符串,不能用变量名。所以用 class=balance_class
+    // 把字符串值直接绑上去。
+    // 业务规则:Decimal 严格加减不应出现四舍五入误差,所以只有"真不一致"才上红底;
+    // 一旦财务人员确认(`balance_confirmed_at` 非空),mismatch 行也按 ok 样式
+    // 显示(余额 cell 绿色加粗、整行无背景)。
+    let is_confirmed = row.balance_confirmed_at.is_some();
+    let balance_class = match (row.balance_check_status.as_deref(), is_confirmed) {
+        (_, true) => "balance-ok",
+        (Some("ok"), false) => "balance-ok",
+        (Some("mismatch"), false) => "balance-mismatch",
+        (Some("skip"), false) | (None, false) => "balance-skip",
+        (_, false) => "balance-skip",
     };
     view! {
         <tr
-            class=(balance_class, true)
+            class=balance_class
             class=("selected", is_active)
             tabindex="0"
             on:click=move |_| set_selected.set(Some(id))

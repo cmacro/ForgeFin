@@ -496,8 +496,8 @@ fn parse_and_insert_records(
                 (prev_balance, cur_bal_decimal, cur_in, cur_out)
             {
                 let expected = prev + in_amt - out_amt;
-                let diff = expected - cur_bal;
-                if !is_within_balance_tolerance(diff) {
+                if expected != cur_bal {
+                    let diff = expected - cur_bal;
                     balance_disc = Some(format!(
                         "余额不连续:上一行余额 {prev} + 转入 {in_amt} - 转出 {out_amt} = {expected},实际 {cur_bal},差额 {diff}"
                     ));
@@ -633,16 +633,11 @@ fn extract_decimal(map: &HashMap<String, String>, keys: &[&str]) -> Option<Decim
     None
 }
 
-/// 余额连续性容差:允许 ±0.01(四舍五入、银行拆分行可能产生 1 分误差)。
-fn is_within_balance_tolerance(diff: Decimal) -> bool {
-    let abs = if diff.is_sign_negative() { -diff } else { diff };
-    abs <= Decimal::new(1, 2)
-}
-
 /// 首末余额 vs Σ差额自检。
 ///
 /// 当文件至少 2 行有余额时计算 `末行余额 - 首行余额` 与 `Σ转入 - Σ转出`,
-/// 不一致(> 0.01)时返回警告字符串。
+/// 不一致时返回警告字符串。Decimal 严格加减,不应用容差 —— 任何不平都是真问题,
+/// 应由财务人员人工确认。
 fn check_balance_first_last(
     first: Option<Decimal>,
     last: Option<Decimal>,
@@ -657,9 +652,9 @@ fn check_balance_first_last(
     let last = last?;
     let by_balance = last - first;
     let by_amount = sum_in - sum_out;
-    let diff = by_balance - by_amount;
     let mut parts: Vec<String> = Vec::new();
-    if !is_within_balance_tolerance(diff) {
+    if by_balance != by_amount {
+        let diff = by_balance - by_amount;
         parts.push(format!(
             "首末余额差额 {by_balance} 与 Σ(转入) - Σ(转出) = {by_amount} 不一致,差额 {diff}"
         ));
@@ -926,6 +921,28 @@ pub fn list_raw_audit_logs_cmd(
 }
 
 #[tauri::command]
+pub fn confirm_balance_batch_cmd(
+    db: State<'_, std::sync::Mutex<DbState>>,
+    session: State<'_, std::sync::Mutex<SessionState>>,
+    batch_id: i64,
+) -> Result<i64, String> {
+    with_company_conn(&db, &session, |conn| {
+        confirm_balance_batch_core(conn, batch_id)
+    })
+}
+
+#[tauri::command]
+pub fn unconfirm_balance_batch_cmd(
+    db: State<'_, std::sync::Mutex<DbState>>,
+    session: State<'_, std::sync::Mutex<SessionState>>,
+    batch_id: i64,
+) -> Result<i64, String> {
+    with_company_conn(&db, &session, |conn| {
+        unconfirm_balance_batch_core(conn, batch_id)
+    })
+}
+
+#[tauri::command]
 pub async fn read_source_file_cmd(file_path: String) -> Result<String, String> {
     let content = tokio::fs::read_to_string(&file_path)
         .await
@@ -964,6 +981,11 @@ pub struct RawRecord {
     /// - `None`:不适用(非 bank_flow)
     #[serde(default)]
     pub balance_check_status: Option<String>,
+    /// 余额连续性财务确认时间(ISO8601 字符串)。
+    /// 非 NULL 时表示该行已被财务人员确认,
+    /// 即便 `balance_check_status` 为 `mismatch` 也不在 UI 展示红底告警。
+    #[serde(default)]
+    pub balance_confirmed_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -1173,7 +1195,7 @@ pub fn list_raw_records_core(
     let list_sql = format!(
         "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
                 sr.record_no, sr.record_date, sr.amount_total, sr.balance, sr.currency, sr.counterpart_info,
-                sr.summary, sr.status, sr.created_at, ib.file_path
+                sr.summary, sr.status, sr.created_at, ib.file_path, sr.balance_confirmed_at
          FROM source_records sr
          JOIN source_types st ON sr.source_type_id = st.id
          LEFT JOIN import_batches ib ON sr.import_batch_id = ib.id
@@ -1210,6 +1232,7 @@ pub fn list_raw_records_core(
                 created_at: row.get(14)?,
                 file_path: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
                 balance_check_status,
+                balance_confirmed_at: row.get(16)?,
             })
         })
         .map_err(|e| format!("查询原始记录失败: {e}"))?
@@ -1252,8 +1275,8 @@ fn parse_amount_from_raw_data(raw_data: &str) -> Option<(Decimal, Decimal)> {
 
 /// 对一批银行流水的轻量数据,正序遍历,计算每行的余额连续性状态。
 /// 返回 `id -> status` 映射,status 取值:
-/// - `"ok"`:本行余额与(prev + in - out)完全一致
-/// - `"mismatch"`:不一致
+/// - `"ok"`:本行余额与(prev + in - out)严格相等(Decimal 严格加减,不需要容差)
+/// - `"mismatch"`:不一致 — 需财务人员确认;确认后 UI 不再显示红底
 /// - `"skip"`:无法计算(余额为空/缺转入或转出/无上一行)
 fn compute_balance_check_status(
     rows: &[BalanceCheckRow],
@@ -1332,6 +1355,66 @@ fn fetch_balance_check_rows(
     Ok(rows)
 }
 
+/// 财务人员对某一批次银行流水的余额连续性进行整体确认。
+///
+/// 业务规则:Decimal 严格加减不应出现四舍五入误差,任何"余额不平"都视为真问题;
+/// 财务核对后(可能是跨日补录、合并入账、银行分笔误差等)才用本接口批量确认。
+///
+/// 行为:将该 `import_batch_id` 下所有 `bank_flow` 记录的 `balance_confirmed_at`
+/// 写为当前时间;同时把对应的 `import_errors` 中 `field_name='balance_discontinuity'`
+/// 的行删除,避免误报。返回本次影响的行数。
+pub fn confirm_balance_batch_core(
+    conn: &rusqlite::Connection,
+    batch_id: i64,
+) -> Result<i64, String> {
+    let ts = now_str();
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("开启事务失败: {e}"))?;
+
+    let updated = tx
+        .execute(
+            "UPDATE source_records
+             SET balance_confirmed_at = ?1
+             WHERE import_batch_id = ?2
+               AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
+               AND balance_confirmed_at IS NULL",
+            rusqlite::params![ts, batch_id],
+        )
+        .map_err(|e| format!("更新余额确认时间失败: {e}"))?;
+
+    tx.execute(
+        "DELETE FROM import_errors
+         WHERE import_batch_id = ?1
+           AND field_name = 'balance_discontinuity'",
+        rusqlite::params![batch_id],
+    )
+    .map_err(|e| format!("清理 import_errors 失败: {e}"))?;
+
+    tx.commit().map_err(|e| format!("提交事务失败: {e}"))?;
+    Ok(updated as i64)
+}
+
+/// 撤销对某一批次银行流水余额连续性的整体确认(把 `balance_confirmed_at` 清空)。
+///
+/// 撤销后,UI 行级 `balance-mismatch` 红底会重新显示(如果该行仍处于 mismatch)。
+pub fn unconfirm_balance_batch_core(
+    conn: &rusqlite::Connection,
+    batch_id: i64,
+) -> Result<i64, String> {
+    let updated = conn
+        .execute(
+            "UPDATE source_records
+             SET balance_confirmed_at = NULL
+             WHERE import_batch_id = ?1
+               AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
+               AND balance_confirmed_at IS NOT NULL",
+            rusqlite::params![batch_id],
+        )
+        .map_err(|e| format!("撤销余额确认失败: {e}"))?;
+    Ok(updated as i64)
+}
+
 pub fn get_raw_record_core(
     conn: &rusqlite::Connection,
     id: i64,
@@ -1340,7 +1423,7 @@ pub fn get_raw_record_core(
         .query_row(
             "SELECT sr.id, st.code, st.name, sr.import_batch_id, sr.source_file_name, sr.source_row_no,
                     sr.record_no, sr.record_date, sr.amount_total, sr.balance, sr.currency, sr.counterpart_info,
-                    sr.summary, sr.status, sr.created_at, sr.raw_data, ib.file_path
+                    sr.summary, sr.status, sr.created_at, sr.raw_data, ib.file_path, sr.balance_confirmed_at
              FROM source_records sr
              JOIN source_types st ON sr.source_type_id = st.id
              LEFT JOIN import_batches ib ON sr.import_batch_id = ib.id
@@ -1366,6 +1449,7 @@ pub fn get_raw_record_core(
                         created_at: row.get(14)?,
                         file_path: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
                         balance_check_status: None,
+                        balance_confirmed_at: row.get(17)?,
                     },
                     row.get::<_, String>(15)?,
                 ))
@@ -2711,5 +2795,199 @@ mod tests {
         assert_eq!(statuses[1], Some("skip".to_string()));
 
         let _ = std::fs::remove_file(&bank);
+    }
+
+    /// 严格相等回归:1 分的差异(曾经落入容差)现在应直接是 mismatch。
+    /// 业务规则:Decimal 严格加减不应出现四舍五入误差,任何不平都是真问题。
+    #[test]
+    fn test_balance_check_status_strict_no_tolerance() {
+        let conn = in_memory_company_conn();
+        // 第 1 行 balance = 100000.00
+        // 第 2 行 in = 1000.00, out = 0.00, balance = 100999.99 → expected = 101000.00,差 0.01
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_strict"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t100999.99\n",
+        );
+        import_file_core(&conn, &bank, None, None).expect("导入失败");
+
+        let rows = fetch_balance_check_rows(&conn, Some("bank_flow")).expect("fetch");
+        let map = compute_balance_check_status(&rows);
+        let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        // 严格相等,0.01 差异也算 mismatch
+        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("mismatch"));
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// confirm_balance_batch_core:确认后 batch 内所有 bank_flow 行 balance_confirmed_at 非空,
+    /// 且对应的 import_errors.balance_discontinuity 行被清理。
+    #[test]
+    fn test_confirm_balance_batch_writes_timestamp_and_clears_errors() {
+        let conn = in_memory_company_conn();
+        // 第 1 行 ok;第 2 行 mismatch(差 1.00);导入会产生 balance_discontinuity 错误。
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_confirm"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t99999.00\n",
+        );
+        let res = import_file_core(&conn, &bank, None, None).expect("导入失败");
+        let batch_id = res.batch_id;
+
+        // 确认前:batch 内 balance_confirmed_at 全为 NULL,且存在 balance_discontinuity 错误
+        let confirmed_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM source_records
+                 WHERE import_batch_id = ?1
+                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
+                   AND balance_confirmed_at IS NOT NULL",
+                rusqlite::params![batch_id],
+                |row| row.get(0),
+            )
+            .expect("query before");
+        assert_eq!(confirmed_before, 0);
+
+        let err_count_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM import_errors
+                 WHERE import_batch_id = ?1 AND field_name = 'balance_discontinuity'",
+                rusqlite::params![batch_id],
+                |row| row.get(0),
+            )
+            .expect("query err before");
+        assert!(err_count_before > 0, "mismatch 行应已写入 import_errors");
+
+        // 确认
+        let updated = confirm_balance_batch_core(&conn, batch_id).expect("confirm");
+        assert_eq!(updated, 2, "两行都应被确认");
+
+        // 确认后:batch 内 balance_confirmed_at 全部非空,balance_discontinuity 错误清空
+        let confirmed_after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM source_records
+                 WHERE import_batch_id = ?1
+                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
+                   AND balance_confirmed_at IS NOT NULL",
+                rusqlite::params![batch_id],
+                |row| row.get(0),
+            )
+            .expect("query after");
+        assert_eq!(confirmed_after, 2);
+
+        let err_count_after: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM import_errors
+                 WHERE import_batch_id = ?1 AND field_name = 'balance_discontinuity'",
+                rusqlite::params![batch_id],
+                |row| row.get(0),
+            )
+            .expect("query err after");
+        assert_eq!(err_count_after, 0);
+
+        // list_raw_records_core 返回的 balance_confirmed_at 也应为非空
+        let page = list_raw_records_core(
+            &conn,
+            &RawRecordFilter {
+                source_type: Some("bank_flow".to_string()),
+                batch_id: Some(batch_id),
+                page: 1,
+                page_size: 50,
+            },
+        )
+        .expect("list");
+        let snapshot: Vec<(
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = page
+            .items
+            .iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.record_date.clone(),
+                    r.balance.clone(),
+                    r.balance_check_status.clone(),
+                    r.balance_confirmed_at.clone(),
+                )
+            })
+            .collect();
+        for r in &page.items {
+            assert!(
+                r.balance_confirmed_at.is_some(),
+                "list 应返回 balance_confirmed_at: row {} = {:?}",
+                r.id,
+                r.balance_confirmed_at
+            );
+        }
+        // 至少有一行 balance_check_status = mismatch(确认后 status 仍报不平,
+        // 后端持续暴露事实,前端据此判断"已确认 → 仍按 ok 样式显示")。
+        // 另一行通常为 skip(无 prev),不能要求"全部 mismatch"。
+        assert!(
+            page.items
+                .iter()
+                .any(|r| r.balance_check_status.as_deref() == Some("mismatch")),
+            "DEBUG snapshot = {snapshot:#?}"
+        );
+
+        // 撤销
+        let cleared = unconfirm_balance_batch_core(&conn, batch_id).expect("unconfirm");
+        assert_eq!(cleared, 2);
+        let confirmed_cleared: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM source_records
+                 WHERE import_batch_id = ?1
+                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
+                   AND balance_confirmed_at IS NOT NULL",
+                rusqlite::params![batch_id],
+                |row| row.get(0),
+            )
+            .expect("query cleared");
+        assert_eq!(confirmed_cleared, 0);
+
+        let _ = std::fs::remove_file(&bank);
+    }
+
+    /// confirm_balance_batch_core 不会影响其它 source_type 的记录。
+    #[test]
+    fn test_confirm_balance_batch_only_affects_bank_flow() {
+        let conn = in_memory_company_conn();
+        // 同时导入银行流水(确认目标)和订单流水(非目标)
+        let bank = write_temp_tsv(
+            &unique_temp_name("bank_isolate"),
+            "凭证号\t交易时间\t对方单位\t转入金额\t转出金额\t余额\n\
+             000000000\t2026-07-10 10:00:00\tA\t0.00\t0.00\t100000.00\n\
+             000000000\t2026-07-10 11:00:00\tB\t1000.00\t0.00\t99999.00\n",
+        );
+        let order = write_temp_tsv(
+            &unique_temp_name("order_isolate"),
+            "凭证号\t交易时间\t对方单位\t订单金额\t手续费\t商户实收\n\
+             ORD001\t2026-07-10 10:00:00\t客户X\t100.00\t0.25\t99.75\n",
+        );
+        let bank_res = import_file_core(&conn, &bank, None, None).expect("import bank");
+        import_file_core(&conn, &order, None, None).expect("import order");
+
+        let updated = confirm_balance_batch_core(&conn, bank_res.batch_id).expect("confirm");
+        assert_eq!(updated, 2, "只影响 2 行银行流水");
+
+        // 订单流水的 balance_confirmed_at 应仍为 NULL(虽无意义但走通用 SQL 应当 OK;
+        // 真实情况是 SQL 限定 source_type_id = bank_flow,所以订单不会受影响)
+        let order_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM source_records
+                 WHERE source_type_id = (SELECT id FROM source_types WHERE code = 'order_flow')
+                   AND balance_confirmed_at IS NOT NULL",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query order");
+        assert_eq!(order_count, 0, "订单流水不应被银行流水的确认动作影响");
+
+        let _ = std::fs::remove_file(&bank);
+        let _ = std::fs::remove_file(&order);
     }
 }
