@@ -1369,11 +1369,11 @@ pub fn list_raw_records_core(
 
 /// 余额连续性校验的轻量数据(从 raw_data 抽取必要字段)
 #[derive(Debug)]
-pub struct BalanceCheckRow {
-    id: i64,
-    balance: Option<String>,
+pub(crate) struct BalanceCheckRow {
+    pub(crate) id: i64,
+    pub(crate) balance: Option<String>,
     /// raw_data JSON 字符串
-    raw_data: String,
+    pub(crate) raw_data: String,
 }
 
 /// 解析 raw_data JSON,提取"转入金额"、"转出金额"。
@@ -1434,7 +1434,7 @@ pub fn compute_balance_check_status(
 /// 拉取所有 bank_flows 的轻量数据(用于余额连续性校验)。
 ///
 /// 用于计算余额连续性,需要全量正序遍历,因此不分页。
-fn fetch_balance_check_rows(
+pub(crate) fn fetch_balance_check_rows(
     conn: &rusqlite::Connection,
     _source_type: Option<&str>,
 ) -> Result<Vec<BalanceCheckRow>, String> {

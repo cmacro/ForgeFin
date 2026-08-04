@@ -1,4 +1,5 @@
 use rust_decimal::Decimal;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
