@@ -128,6 +128,19 @@ fn parse_amount(value: &str) -> Option<Decimal> {
     Decimal::from_str_exact(&cleaned).ok()
 }
 
+fn yuan_to_cents(s: &str) -> i64 {
+    let cleaned = s.replace(',', "").trim().to_string();
+    if cleaned.is_empty() {
+        return 0;
+    }
+    if let Some(d) = Decimal::from_str_exact(&cleaned).ok() {
+        let cents = d * Decimal::new(100, 0);
+        cents.round_dp(0).try_into().unwrap_or(0)
+    } else {
+        0
+    }
+}
+
 pub(crate) fn now_str() -> String {
     Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
@@ -444,6 +457,8 @@ fn parse_and_insert_records(
     // 仅对银行流水启用余额连续性校验。
     // 跟踪:首行余额、末行余额、累计 Σ转入 - Σ转出、上行余额。
     let is_bank_flow = source_type == "bank_flow";
+    let is_order_flow = source_type == "order_flow";
+    let is_pos_flow = source_type == "pos_flow";
     let mut first_balance: Option<Decimal> = None;
     let mut last_balance: Option<Decimal> = None;
     let mut sum_in: Decimal = Decimal::ZERO;
@@ -519,72 +534,199 @@ fn parse_and_insert_records(
             }
         }
 
-        let insert_res = tx.execute(
-            "INSERT INTO source_records
-             (source_type_id, import_batch_id, source_file_name, source_row_no, record_no, record_date, amount_total, balance, currency, counterpart_info, summary, raw_data, row_hash, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'CNY', ?9, ?10, ?11, ?12, 'pending', ?13)",
-            rusqlite::params![
-                source_type_id,
-                import_batch_id,
-                source_file_name,
-                row_no,
-                record_no,
-                record_date,
-                amount_total,
-                balance,
-                counterpart_info,
-                summary,
-                raw_data,
-                row_hash,
-                ts_now,
-            ],
-        );
+        // 银行流水:写入 bank_flows 独立表(金额以分为单位)
+        if is_bank_flow {
+            let amount_in_str = extract_value(&map, &["转入金额"]).unwrap_or_default();
+            let amount_out_str = extract_value(&map, &["转出金额"]).unwrap_or_default();
+            let amount_total_str = amount_total.clone().unwrap_or_default();
+            let balance_str = balance.clone().unwrap_or_default();
 
-        match insert_res {
-            Ok(_) => {
-                inserted += 1;
-                if let Some(msg) = balance_disc {
+            let amount_in_cents = yuan_to_cents(&amount_in_str);
+            let amount_out_cents = yuan_to_cents(&amount_out_str);
+            let amount_total_cents = yuan_to_cents(&amount_total_str);
+            let balance_cents = if balance_str.is_empty() {
+                None
+            } else {
+                Some(yuan_to_cents(&balance_str))
+            };
+
+            let insert_res = tx.execute(
+                "INSERT INTO bank_flows
+                 (import_batch_id, source_file_name, source_row_no, record_no, record_date,
+                  amount_in, amount_out, amount_total, balance, currency, counterpart_info,
+                  summary, raw_data, row_hash, status, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, 'pending', ?14)",
+                rusqlite::params![
+                    import_batch_id,
+                    source_file_name,
+                    row_no,
+                    record_no,
+                    record_date,
+                    amount_in_cents,
+                    amount_out_cents,
+                    amount_total_cents,
+                    balance_cents,
+                    counterpart_info,
+                    summary,
+                    raw_data,
+                    row_hash,
+                    ts_now,
+                ],
+            );
+
+            match insert_res {
+                Ok(_) => {
+                    inserted += 1;
+                    if let Some(msg) = balance_disc {
+                        tx.execute(
+                            "INSERT INTO import_errors
+                             (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
+                             VALUES (?1, ?2, 'balance_discontinuity', ?3, ?4, ?5)",
+                            rusqlite::params![
+                                import_batch_id,
+                                row_no,
+                                balance.as_deref().unwrap_or(""),
+                                msg,
+                                ts_now,
+                            ],
+                        )
+                        .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
+                        discontinuity_rows += 1;
+                    }
+                }
+                Err(rusqlite::Error::SqliteFailure(err, _))
+                    if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+                {
+                    let dup_value = record_no
+                        .clone()
+                        .or_else(|| record_date.clone())
+                        .unwrap_or_default();
                     tx.execute(
                         "INSERT INTO import_errors
                          (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
-                         VALUES (?1, ?2, 'balance_discontinuity', ?3, ?4, ?5)",
+                         VALUES (?1, ?2, 'duplicate_row', ?3, ?4, ?5)",
                         rusqlite::params![
                             import_batch_id,
                             row_no,
-                            balance.as_deref().unwrap_or(""),
-                            msg,
+                            dup_value,
+                            "原始行已存在,跳过入库(可能来源文件存在重叠)",
                             ts_now,
                         ],
                     )
                     .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
-                    discontinuity_rows += 1;
+                    skipped += 1;
+                }
+                Err(e) => {
+                    return Err(format!("写入 bank_flows 失败 (行 {row_no}): {e}"));
                 }
             }
-            Err(rusqlite::Error::SqliteFailure(err, _))
-                if err.code == rusqlite::ErrorCode::ConstraintViolation =>
-            {
-                // 行级唯一约束触发:写入 import_errors,继续处理其余行
-                let dup_value = record_no
-                    .clone()
-                    .or_else(|| record_date.clone())
-                    .unwrap_or_default();
-                tx.execute(
-                    "INSERT INTO import_errors
-                     (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
-                     VALUES (?1, ?2, 'duplicate_row', ?3, ?4, ?5)",
-                    rusqlite::params![
-                        import_batch_id,
-                        row_no,
-                        dup_value,
-                        "原始行已存在,跳过入库(可能来源文件存在重叠)",
-                        ts_now,
-                    ],
-                )
-                .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
-                skipped += 1;
+        } else if is_order_flow {
+            // 订单流水:写入 order_flows 独立表(金额以分为单位)
+            let amount_total_str = amount_total.clone().unwrap_or_default();
+            let amount_total_cents = yuan_to_cents(&amount_total_str);
+
+            let insert_res = tx.execute(
+                "INSERT INTO order_flows
+                 (import_batch_id, source_file_name, source_row_no, record_no, record_date,
+                  amount_total, currency, counterpart_info, summary, raw_data, row_hash, status, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9, ?10, 'pending', ?11)",
+                rusqlite::params![
+                    import_batch_id,
+                    source_file_name,
+                    row_no,
+                    record_no,
+                    record_date,
+                    amount_total_cents,
+                    counterpart_info,
+                    summary,
+                    raw_data,
+                    row_hash,
+                    ts_now,
+                ],
+            );
+
+            match insert_res {
+                Ok(_) => {
+                    inserted += 1;
+                }
+                Err(rusqlite::Error::SqliteFailure(err, _))
+                    if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+                {
+                    let dup_value = record_no
+                        .clone()
+                        .or_else(|| record_date.clone())
+                        .unwrap_or_default();
+                    tx.execute(
+                        "INSERT INTO import_errors
+                         (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
+                         VALUES (?1, ?2, 'duplicate_row', ?3, ?4, ?5)",
+                        rusqlite::params![
+                            import_batch_id,
+                            row_no,
+                            dup_value,
+                            "原始行已存在,跳过入库(可能来源文件存在重叠)",
+                            ts_now,
+                        ],
+                    )
+                    .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
+                    skipped += 1;
+                }
+                Err(e) => {
+                    return Err(format!("写入 order_flows 失败 (行 {row_no}): {e}"));
+                }
             }
-            Err(e) => {
-                return Err(format!("写入 source_records 失败 (行 {row_no}): {e}"));
+        } else if is_pos_flow {
+            // POS 流水:写入 source_records(尚无独立表)
+            let insert_res = tx.execute(
+                "INSERT INTO source_records
+                 (source_type_id, import_batch_id, source_file_name, source_row_no, record_no, record_date, amount_total, balance, currency, counterpart_info, summary, raw_data, row_hash, status, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'CNY', ?9, ?10, ?11, ?12, 'pending', ?13)",
+                rusqlite::params![
+                    source_type_id,
+                    import_batch_id,
+                    source_file_name,
+                    row_no,
+                    record_no,
+                    record_date,
+                    amount_total,
+                    balance,
+                    counterpart_info,
+                    summary,
+                    raw_data,
+                    row_hash,
+                    ts_now,
+                ],
+            );
+
+            match insert_res {
+                Ok(_) => {
+                    inserted += 1;
+                }
+                Err(rusqlite::Error::SqliteFailure(err, _))
+                    if err.code == rusqlite::ErrorCode::ConstraintViolation =>
+                {
+                    let dup_value = record_no
+                        .clone()
+                        .or_else(|| record_date.clone())
+                        .unwrap_or_default();
+                    tx.execute(
+                        "INSERT INTO import_errors
+                         (import_batch_id, source_row_no, field_name, field_value, error_message, created_at)
+                         VALUES (?1, ?2, 'duplicate_row', ?3, ?4, ?5)",
+                        rusqlite::params![
+                            import_batch_id,
+                            row_no,
+                            dup_value,
+                            "原始行已存在,跳过入库(可能来源文件存在重叠)",
+                            ts_now,
+                        ],
+                    )
+                    .map_err(|e| format!("写入 import_errors 失败 (行 {row_no}): {e}"))?;
+                    skipped += 1;
+                }
+                Err(e) => {
+                    return Err(format!("写入 source_records 失败 (行 {row_no}): {e}"));
+                }
             }
         }
     }
@@ -921,28 +1063,6 @@ pub fn list_raw_audit_logs_cmd(
 }
 
 #[tauri::command]
-pub fn confirm_balance_batch_cmd(
-    db: State<'_, std::sync::Mutex<DbState>>,
-    session: State<'_, std::sync::Mutex<SessionState>>,
-    batch_id: i64,
-) -> Result<i64, String> {
-    with_company_conn(&db, &session, |conn| {
-        confirm_balance_batch_core(conn, batch_id)
-    })
-}
-
-#[tauri::command]
-pub fn unconfirm_balance_batch_cmd(
-    db: State<'_, std::sync::Mutex<DbState>>,
-    session: State<'_, std::sync::Mutex<SessionState>>,
-    batch_id: i64,
-) -> Result<i64, String> {
-    with_company_conn(&db, &session, |conn| {
-        unconfirm_balance_batch_core(conn, batch_id)
-    })
-}
-
-#[tauri::command]
 pub async fn read_source_file_cmd(file_path: String) -> Result<String, String> {
     let content = tokio::fs::read_to_string(&file_path)
         .await
@@ -1249,7 +1369,7 @@ pub fn list_raw_records_core(
 
 /// 余额连续性校验的轻量数据(从 raw_data 抽取必要字段)
 #[derive(Debug)]
-struct BalanceCheckRow {
+pub struct BalanceCheckRow {
     id: i64,
     balance: Option<String>,
     /// raw_data JSON 字符串
@@ -1278,7 +1398,7 @@ fn parse_amount_from_raw_data(raw_data: &str) -> Option<(Decimal, Decimal)> {
 /// - `"ok"`:本行余额与(prev + in - out)严格相等(Decimal 严格加减,不需要容差)
 /// - `"mismatch"`:不一致 — 需财务人员确认;确认后 UI 不再显示红底
 /// - `"skip"`:无法计算(余额为空/缺转入或转出/无上一行)
-fn compute_balance_check_status(
+pub fn compute_balance_check_status(
     rows: &[BalanceCheckRow],
 ) -> std::collections::HashMap<i64, String> {
     let mut out = std::collections::HashMap::with_capacity(rows.len());
@@ -1311,31 +1431,19 @@ fn compute_balance_check_status(
     out
 }
 
-/// 拉取某 source_type 下所有匹配过滤的轻量数据(仅银行流水)。
+/// 拉取所有 bank_flows 的轻量数据(用于余额连续性校验)。
 ///
 /// 用于计算余额连续性,需要全量正序遍历,因此不分页。
 fn fetch_balance_check_rows(
     conn: &rusqlite::Connection,
-    source_type: Option<&str>,
+    _source_type: Option<&str>,
 ) -> Result<Vec<BalanceCheckRow>, String> {
     let mut sql = String::from(
-        "SELECT sr.id, sr.balance, sr.raw_data
-         FROM source_records sr
-         JOIN source_types st ON sr.source_type_id = st.id
-         WHERE st.code = 'bank_flow'",
+        "SELECT bf.id, bf.balance, bf.raw_data
+         FROM bank_flows bf",
     );
     let params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if let Some(t) = source_type {
-        if t == "bank_flow" {
-            // 已经在 WHERE 限定
-        } else {
-            // 其它 source_type 不需要计算
-            return Ok(Vec::new());
-        }
-    } else {
-        // 无 source_type 过滤:仍只算 bank_flow(WHERE 已限定)
-    }
-    sql.push_str(" ORDER BY sr.record_date ASC, sr.id ASC");
+    sql.push_str(" ORDER BY bf.record_date ASC, bf.id ASC");
 
     let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let mut stmt = conn
@@ -1353,66 +1461,6 @@ fn fetch_balance_check_rows(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("查询余额校验数据失败: {e}"))?;
     Ok(rows)
-}
-
-/// 财务人员对某一批次银行流水的余额连续性进行整体确认。
-///
-/// 业务规则:Decimal 严格加减不应出现四舍五入误差,任何"余额不平"都视为真问题;
-/// 财务核对后(可能是跨日补录、合并入账、银行分笔误差等)才用本接口批量确认。
-///
-/// 行为:将该 `import_batch_id` 下所有 `bank_flow` 记录的 `balance_confirmed_at`
-/// 写为当前时间;同时把对应的 `import_errors` 中 `field_name='balance_discontinuity'`
-/// 的行删除,避免误报。返回本次影响的行数。
-pub fn confirm_balance_batch_core(
-    conn: &rusqlite::Connection,
-    batch_id: i64,
-) -> Result<i64, String> {
-    let ts = now_str();
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| format!("开启事务失败: {e}"))?;
-
-    let updated = tx
-        .execute(
-            "UPDATE source_records
-             SET balance_confirmed_at = ?1
-             WHERE import_batch_id = ?2
-               AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
-               AND balance_confirmed_at IS NULL",
-            rusqlite::params![ts, batch_id],
-        )
-        .map_err(|e| format!("更新余额确认时间失败: {e}"))?;
-
-    tx.execute(
-        "DELETE FROM import_errors
-         WHERE import_batch_id = ?1
-           AND field_name = 'balance_discontinuity'",
-        rusqlite::params![batch_id],
-    )
-    .map_err(|e| format!("清理 import_errors 失败: {e}"))?;
-
-    tx.commit().map_err(|e| format!("提交事务失败: {e}"))?;
-    Ok(updated as i64)
-}
-
-/// 撤销对某一批次银行流水余额连续性的整体确认(把 `balance_confirmed_at` 清空)。
-///
-/// 撤销后,UI 行级 `balance-mismatch` 红底会重新显示(如果该行仍处于 mismatch)。
-pub fn unconfirm_balance_batch_core(
-    conn: &rusqlite::Connection,
-    batch_id: i64,
-) -> Result<i64, String> {
-    let updated = conn
-        .execute(
-            "UPDATE source_records
-             SET balance_confirmed_at = NULL
-             WHERE import_batch_id = ?1
-               AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
-               AND balance_confirmed_at IS NOT NULL",
-            rusqlite::params![batch_id],
-        )
-        .map_err(|e| format!("撤销余额确认失败: {e}"))?;
-    Ok(updated as i64)
 }
 
 pub fn get_raw_record_core(
@@ -1569,32 +1617,29 @@ pub fn reconcile_core(conn: &rusqlite::Connection, date: &str) -> Result<Reconci
         .unchecked_transaction()
         .map_err(|e| format!("开启事务失败: {e}"))?;
 
-    // 计算当日银行流水合计
-    // 计算当日银行流水合计
-    let bank_total_text: String = tx
+    // 计算当日银行流水合计(金额以分为单位,除以 100.0 转为元)
+    let bank_total_cents: i64 = tx
         .query_row(
-            "SELECT COALESCE(SUM(CAST(amount_total AS REAL)), 0)
-             FROM source_records sr
-             JOIN source_types st ON sr.source_type_id = st.id
-             WHERE st.code = 'bank_flow' AND sr.record_date = ?1",
+            "SELECT COALESCE(SUM(amount_total), 0)
+             FROM bank_flows
+             WHERE record_date = ?1",
             rusqlite::params![date],
             |row| row.get(0),
         )
         .map_err(|e| format!("汇总银行金额失败: {e}"))?;
-    let bank_total: Decimal = bank_total_text.parse().unwrap_or(Decimal::ZERO);
+    let bank_total: Decimal = Decimal::new(bank_total_cents, 2);
 
-    // 计算当日订单实收合计
-    let order_total_text: String = tx
+    // 计算当日订单实收合计(金额以分为单位,除以 100.0 转为元)
+    let order_total_cents: i64 = tx
         .query_row(
-            "SELECT COALESCE(SUM(CAST(amount_total AS REAL)), 0)
-             FROM source_records sr
-             JOIN source_types st ON sr.source_type_id = st.id
-             WHERE st.code = 'order_flow' AND sr.record_date = ?1",
+            "SELECT COALESCE(SUM(amount_total), 0)
+             FROM order_flows
+             WHERE record_date = ?1",
             rusqlite::params![date],
             |row| row.get(0),
         )
         .map_err(|e| format!("汇总订单金额失败: {e}"))?;
-    let order_total: Decimal = order_total_text.parse().unwrap_or(Decimal::ZERO);
+    let order_total: Decimal = Decimal::new(order_total_cents, 2);
 
     let diff = bank_total - order_total;
     let matched = diff.abs() < Decimal::new(1, 2); // 差额 < 0.01 视为无差异
@@ -1603,10 +1648,9 @@ pub fn reconcile_core(conn: &rusqlite::Connection, date: &str) -> Result<Reconci
     let bank_ids: Vec<i64> = {
         let mut stmt = tx
             .prepare(
-                "SELECT sr.id FROM source_records sr
-                 JOIN source_types st ON sr.source_type_id = st.id
-                 WHERE st.code = 'bank_flow' AND sr.record_date = ?1
-                 ORDER BY sr.id",
+                "SELECT id FROM bank_flows
+                 WHERE record_date = ?1
+                 ORDER BY id",
             )
             .map_err(|e| format!("查询银行记录失败: {e}"))?;
         let rows = stmt
@@ -1618,10 +1662,9 @@ pub fn reconcile_core(conn: &rusqlite::Connection, date: &str) -> Result<Reconci
     let order_ids: Vec<i64> = {
         let mut stmt = tx
             .prepare(
-                "SELECT sr.id FROM source_records sr
-                 JOIN source_types st ON sr.source_type_id = st.id
-                 WHERE st.code = 'order_flow' AND sr.record_date = ?1
-                 ORDER BY sr.id",
+                "SELECT id FROM order_flows
+                 WHERE record_date = ?1
+                 ORDER BY id",
             )
             .map_err(|e| format!("查询订单记录失败: {e}"))?;
         let rows = stmt
@@ -1662,14 +1705,21 @@ pub fn reconcile_core(conn: &rusqlite::Connection, date: &str) -> Result<Reconci
     .map_err(|e| format!("写入对账汇总失败: {e}"))?;
     let summary_id = tx.last_insert_rowid();
 
-    // 若自动匹配,更新来源记录状态为 matched
+    // 若自动匹配,更新 bank_flows 和 order_flows 状态为 matched
     if matched {
-        for id in bank_ids.iter().chain(order_ids.iter()) {
+        for id in bank_ids.iter() {
             tx.execute(
-                "UPDATE source_records SET status = 'matched' WHERE id = ?1",
+                "UPDATE bank_flows SET status = 'matched' WHERE id = ?1",
                 rusqlite::params![id],
             )
-            .map_err(|e| format!("更新来源记录状态失败: {e}"))?;
+            .map_err(|e| format!("更新银行流水状态失败: {e}"))?;
+        }
+        for id in order_ids.iter() {
+            tx.execute(
+                "UPDATE order_flows SET status = 'matched' WHERE id = ?1",
+                rusqlite::params![id],
+            )
+            .map_err(|e| format!("更新订单流水状态失败: {e}"))?;
         }
     }
 
@@ -2181,14 +2231,23 @@ mod tests {
     }
 
     fn count_records(conn: &rusqlite::Connection, source_type: &str) -> i64 {
-        conn.query_row(
-            "SELECT COUNT(*) FROM source_records sr
-             JOIN source_types st ON sr.source_type_id = st.id
-             WHERE st.code = ?1",
-            rusqlite::params![source_type],
-            |row| row.get(0),
-        )
-        .expect("查询记录数失败")
+        match source_type {
+            "bank_flow" => conn
+                .query_row("SELECT COUNT(*) FROM bank_flows", [], |row| row.get(0))
+                .expect("查询 bank_flows 记录数失败"),
+            "order_flow" => conn
+                .query_row("SELECT COUNT(*) FROM order_flows", [], |row| row.get(0))
+                .expect("查询 order_flows 记录数失败"),
+            _ => conn
+                .query_row(
+                    "SELECT COUNT(*) FROM source_records sr
+                     JOIN source_types st ON sr.source_type_id = st.id
+                     WHERE st.code = ?1",
+                    rusqlite::params![source_type],
+                    |row| row.get(0),
+                )
+                .expect("查询记录数失败"),
+        }
     }
 
     fn batch_row_count(conn: &rusqlite::Connection, batch_id: i64) -> i64 {
@@ -2251,7 +2310,7 @@ mod tests {
         // 验证首条记录字段抽取
         let counterpart: String = conn
             .query_row(
-                "SELECT counterpart_info FROM source_records LIMIT 1",
+                "SELECT counterpart_info FROM bank_flows LIMIT 1",
                 [],
                 |row| row.get(0),
             )
@@ -2483,14 +2542,14 @@ mod tests {
             r.balance_check_warning
         );
 
-        let balances: Vec<String> = conn
-            .prepare("SELECT balance FROM source_records WHERE source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow') ORDER BY source_row_no")
+        let balances: Vec<i64> = conn
+            .prepare("SELECT balance FROM bank_flows ORDER BY source_row_no")
             .unwrap()
             .query_map([], |row| row.get(0))
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        assert_eq!(balances, vec!["100000.00", "101000.00"]);
+        assert_eq!(balances, vec![10000000, 10100000]);
 
         let _ = std::fs::remove_file(&bank);
     }
@@ -2756,7 +2815,7 @@ mod tests {
         let _ = std::fs::remove_file(&bank);
     }
 
-    /// list_raw_records_core 应当把 balance_check_status 写入 bank_flow 记录。
+    /// list_bank_flows_core 应当把 balance_check_status 写入 bank_flow 记录。
     #[test]
     fn test_list_raw_records_includes_balance_check_status_for_bank_flow() {
         let conn = in_memory_company_conn();
@@ -2768,10 +2827,9 @@ mod tests {
         );
         import_file_core(&conn, &bank, None, None).expect("导入失败");
 
-        let page = list_raw_records_core(
+        let page = crate::commands::bank_flow::list_bank_flows_core(
             &conn,
-            &RawRecordFilter {
-                source_type: Some("bank_flow".to_string()),
+            &crate::commands::bank_flow::BankFlowFilter {
                 batch_id: None,
                 page: 1,
                 page_size: 50,
@@ -2839,9 +2897,8 @@ mod tests {
         // 确认前:batch 内 balance_confirmed_at 全为 NULL,且存在 balance_discontinuity 错误
         let confirmed_before: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM source_records
+                "SELECT COUNT(*) FROM bank_flows
                  WHERE import_batch_id = ?1
-                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
                    AND balance_confirmed_at IS NOT NULL",
                 rusqlite::params![batch_id],
                 |row| row.get(0),
@@ -2860,15 +2917,15 @@ mod tests {
         assert!(err_count_before > 0, "mismatch 行应已写入 import_errors");
 
         // 确认
-        let updated = confirm_balance_batch_core(&conn, batch_id).expect("confirm");
+        let updated = crate::commands::bank_flow::confirm_balance_batch_core(&conn, batch_id)
+            .expect("confirm");
         assert_eq!(updated, 2, "两行都应被确认");
 
         // 确认后:batch 内 balance_confirmed_at 全部非空,balance_discontinuity 错误清空
         let confirmed_after: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM source_records
+                "SELECT COUNT(*) FROM bank_flows
                  WHERE import_batch_id = ?1
-                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
                    AND balance_confirmed_at IS NOT NULL",
                 rusqlite::params![batch_id],
                 |row| row.get(0),
@@ -2886,11 +2943,10 @@ mod tests {
             .expect("query err after");
         assert_eq!(err_count_after, 0);
 
-        // list_raw_records_core 返回的 balance_confirmed_at 也应为非空
-        let page = list_raw_records_core(
+        // list_bank_flows_core 返回的 balance_confirmed_at 也应为非空
+        let page = crate::commands::bank_flow::list_bank_flows_core(
             &conn,
-            &RawRecordFilter {
-                source_type: Some("bank_flow".to_string()),
+            &crate::commands::bank_flow::BankFlowFilter {
                 batch_id: Some(batch_id),
                 page: 1,
                 page_size: 50,
@@ -2935,13 +2991,13 @@ mod tests {
         );
 
         // 撤销
-        let cleared = unconfirm_balance_batch_core(&conn, batch_id).expect("unconfirm");
+        let cleared = crate::commands::bank_flow::unconfirm_balance_batch_core(&conn, batch_id)
+            .expect("unconfirm");
         assert_eq!(cleared, 2);
         let confirmed_cleared: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM source_records
+                "SELECT COUNT(*) FROM bank_flows
                  WHERE import_batch_id = ?1
-                   AND source_type_id = (SELECT id FROM source_types WHERE code = 'bank_flow')
                    AND balance_confirmed_at IS NOT NULL",
                 rusqlite::params![batch_id],
                 |row| row.get(0),
@@ -2971,16 +3027,16 @@ mod tests {
         let bank_res = import_file_core(&conn, &bank, None, None).expect("import bank");
         import_file_core(&conn, &order, None, None).expect("import order");
 
-        let updated = confirm_balance_batch_core(&conn, bank_res.batch_id).expect("confirm");
+        let updated =
+            crate::commands::bank_flow::confirm_balance_batch_core(&conn, bank_res.batch_id)
+                .expect("confirm");
         assert_eq!(updated, 2, "只影响 2 行银行流水");
 
-        // 订单流水的 balance_confirmed_at 应仍为 NULL(虽无意义但走通用 SQL 应当 OK;
-        // 真实情况是 SQL 限定 source_type_id = bank_flow,所以订单不会受影响)
+        // 订单流水的 balance_confirmed_at 应仍为 NULL
         let order_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM source_records
-                 WHERE source_type_id = (SELECT id FROM source_types WHERE code = 'order_flow')
-                   AND balance_confirmed_at IS NOT NULL",
+                "SELECT COUNT(*) FROM order_flows
+                 WHERE balance_confirmed_at IS NOT NULL",
                 [],
                 |row| row.get(0),
             )

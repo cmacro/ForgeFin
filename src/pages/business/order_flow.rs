@@ -7,7 +7,7 @@ use crate::components::source::raw_record_table::{
 };
 use crate::components::source::record_detail::RecordDetail;
 use crate::components::table::pagination::Pagination;
-use crate::ipc::{self, ColumnPrefs, RawRecordFilter, RawRecordPage};
+use crate::ipc::{self, ColumnPrefs, OrderFlowFilter, RawRecord};
 
 const SOURCE_TYPE: &str = "order_flow";
 
@@ -16,8 +16,7 @@ pub fn OrderFlow() -> impl IntoView {
     let (selected_id, set_selected_id) = signal(Option::<i64>::None);
 
     let initial = LocalResource::new(|| async move {
-        let records = ipc::list_raw_records(&RawRecordFilter {
-            source_type: Some(SOURCE_TYPE.to_string()),
+        let page = ipc::list_order_flows(&OrderFlowFilter {
             batch_id: None,
             page: 1,
             page_size: 50,
@@ -29,14 +28,17 @@ pub fn OrderFlow() -> impl IntoView {
                 source_type: SOURCE_TYPE.to_string(),
                 columns: default_columns(),
             });
-        (records, prefs)
+        (page, prefs)
     });
 
     let detail = LocalResource::new(move || {
         let id = selected_id.get();
         async move {
             match id {
-                Some(id) => ipc::get_raw_record(id).await.unwrap_or(None),
+                Some(id) => ipc::get_order_flow(id)
+                    .await
+                    .unwrap_or(None)
+                    .map(|d| d.into()),
                 None => None,
             }
         }
@@ -46,10 +48,17 @@ pub fn OrderFlow() -> impl IntoView {
         <div class="page-content">
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
                 {move || Suspend::new(async move {
-                    let (records_res, prefs) = initial.await;
-                    match records_res {
+                    let (page_res, prefs) = initial.await;
+                    match page_res {
                         Ok(p) => {
-                            let state = build_state(&p, prefs);
+                            let raw_items: Vec<RawRecord> = p.items.iter().map(|o| o.clone().into()).collect();
+                            let raw_page = crate::ipc::RawRecordPage {
+                                items: raw_items,
+                                total: p.total,
+                                page: p.page,
+                                page_size: p.page_size,
+                            };
+                            let state = build_state(&raw_page, prefs);
                             view! {
                                 <div class="page-toolbar">
                                     <RawRecordToolbar state=state.clone() />
@@ -81,7 +90,7 @@ pub fn OrderFlow() -> impl IntoView {
     }
 }
 
-fn build_state(p: &RawRecordPage, prefs: ColumnPrefs) -> RawRecordFilterState {
+fn build_state(p: &crate::ipc::RawRecordPage, prefs: ColumnPrefs) -> RawRecordFilterState {
     let source_type = SOURCE_TYPE.to_string();
     let on_change = Callback::new(move |cols: BTreeMap<String, bool>| {
         let st = source_type.clone();

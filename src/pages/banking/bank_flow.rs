@@ -8,7 +8,7 @@ use crate::components::source::raw_record_table::{
 };
 use crate::components::source::record_detail::RecordDetail;
 use crate::components::table::pagination::Pagination;
-use crate::ipc::{self, ColumnPrefs, RawRecordFilter, RawRecordPage};
+use crate::ipc::{self, BankFlowFilter, ColumnPrefs, RawRecord};
 
 const SOURCE_TYPE: &str = "bank_flow";
 
@@ -16,10 +16,8 @@ const SOURCE_TYPE: &str = "bank_flow";
 pub fn BankFlow() -> impl IntoView {
     let (selected_id, set_selected_id) = signal(Option::<i64>::None);
 
-    // 一次请求同时取记录与列偏好
     let initial = LocalResource::new(|| async move {
-        let records = ipc::list_raw_records(&RawRecordFilter {
-            source_type: Some(SOURCE_TYPE.to_string()),
+        let page = ipc::list_bank_flows(&BankFlowFilter {
             batch_id: None,
             page: 1,
             page_size: 50,
@@ -31,14 +29,17 @@ pub fn BankFlow() -> impl IntoView {
                 source_type: SOURCE_TYPE.to_string(),
                 columns: default_columns(),
             });
-        (records, prefs)
+        (page, prefs)
     });
 
     let detail = LocalResource::new(move || {
         let id = selected_id.get();
         async move {
             match id {
-                Some(id) => ipc::get_raw_record(id).await.unwrap_or(None),
+                Some(id) => ipc::get_bank_flow(id)
+                    .await
+                    .unwrap_or(None)
+                    .map(|d| d.into()),
                 None => None,
             }
         }
@@ -52,16 +53,22 @@ pub fn BankFlow() -> impl IntoView {
         <div class="page-content">
             <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
                 {move || Suspend::new(async move {
-                    let (records_res, prefs) = initial.await;
-                    match records_res {
+                    let (page_res, prefs) = initial.await;
+                    match page_res {
                         Ok(p) => {
-                            let state = build_state(&p, prefs);
-                            let items = p.items.clone();
+                            let raw_items: Vec<RawRecord> = p.items.iter().map(|b| b.clone().into()).collect();
+                            let raw_page = crate::ipc::RawRecordPage {
+                                items: raw_items.clone(),
+                                total: p.total,
+                                page: p.page,
+                                page_size: p.page_size,
+                            };
+                            let state = build_state(&raw_page, prefs);
                             view! {
                                 <div class="page-toolbar">
                                     <RawRecordToolbar state=state.clone() />
                                     <BankFlowBalanceBar
-                                        items=items
+                                        items=raw_items
                                         on_changed=Callback::new(move |_| refresh_records())
                                     />
                                 </div>
@@ -92,7 +99,7 @@ pub fn BankFlow() -> impl IntoView {
     }
 }
 
-fn build_state(p: &RawRecordPage, prefs: ColumnPrefs) -> RawRecordFilterState {
+fn build_state(p: &crate::ipc::RawRecordPage, prefs: ColumnPrefs) -> RawRecordFilterState {
     let source_type = SOURCE_TYPE.to_string();
     let on_change = Callback::new(move |cols: BTreeMap<String, bool>| {
         let st = source_type.clone();

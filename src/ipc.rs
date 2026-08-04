@@ -623,6 +623,169 @@ pub struct VoucherSummary {
     pub credit_total: String,
 }
 
+// =====================================================================
+// 银行流水 IPC 类型(独立表 bank_flows)
+// =====================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BankFlowRecord {
+    pub id: i64,
+    pub import_batch_id: i64,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub record_no: Option<String>,
+    pub record_date: Option<String>,
+    pub amount_in: Option<String>,
+    pub amount_out: Option<String>,
+    pub amount_total: Option<String>,
+    pub balance: Option<String>,
+    pub currency: String,
+    pub counterpart_info: Option<String>,
+    pub summary: Option<String>,
+    pub status: String,
+    pub created_at: String,
+    pub file_path: String,
+    #[serde(default)]
+    pub balance_check_status: Option<String>,
+    #[serde(default)]
+    pub balance_confirmed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct BankFlowFilter {
+    pub batch_id: Option<i64>,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BankFlowPage {
+    pub items: Vec<BankFlowRecord>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BankFlowDetail {
+    pub record: BankFlowRecord,
+    pub raw_data: String,
+}
+
+impl From<BankFlowRecord> for RawRecord {
+    fn from(b: BankFlowRecord) -> Self {
+        RawRecord {
+            id: b.id,
+            source_type: "bank_flow".to_string(),
+            source_type_name: "银行流水".to_string(),
+            import_batch_id: b.import_batch_id,
+            source_file_name: b.source_file_name,
+            source_row_no: b.source_row_no,
+            record_no: b.record_no,
+            record_date: b.record_date,
+            amount_total: b.amount_total,
+            balance: b.balance,
+            currency: b.currency,
+            counterpart_info: b.counterpart_info,
+            summary: b.summary,
+            status: b.status,
+            created_at: b.created_at,
+            file_path: b.file_path,
+            balance_check_status: b.balance_check_status,
+            balance_confirmed_at: b.balance_confirmed_at,
+        }
+    }
+}
+
+impl From<BankFlowDetail> for RawRecordDetail {
+    fn from(d: BankFlowDetail) -> Self {
+        RawRecordDetail {
+            record: d.record.into(),
+            raw_data: d.raw_data,
+            attachments: Vec::new(),
+            audit_logs: Vec::new(),
+        }
+    }
+}
+
+// =====================================================================
+// 订单流水 IPC 类型(独立表 order_flows)
+// =====================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrderFlowRecord {
+    pub id: i64,
+    pub import_batch_id: i64,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub record_no: Option<String>,
+    pub record_date: Option<String>,
+    pub amount_total: Option<String>,
+    pub currency: String,
+    pub counterpart_info: Option<String>,
+    pub summary: Option<String>,
+    pub status: String,
+    pub created_at: String,
+    pub file_path: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct OrderFlowFilter {
+    pub batch_id: Option<i64>,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrderFlowPage {
+    pub items: Vec<OrderFlowRecord>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrderFlowDetail {
+    pub record: OrderFlowRecord,
+    pub raw_data: String,
+}
+
+impl From<OrderFlowRecord> for RawRecord {
+    fn from(o: OrderFlowRecord) -> Self {
+        RawRecord {
+            id: o.id,
+            source_type: "order_flow".to_string(),
+            source_type_name: "订单流水".to_string(),
+            import_batch_id: o.import_batch_id,
+            source_file_name: o.source_file_name,
+            source_row_no: o.source_row_no,
+            record_no: o.record_no,
+            record_date: o.record_date,
+            amount_total: o.amount_total,
+            balance: None,
+            currency: o.currency,
+            counterpart_info: o.counterpart_info,
+            summary: o.summary,
+            status: o.status,
+            created_at: o.created_at,
+            file_path: o.file_path,
+            balance_check_status: None,
+            balance_confirmed_at: None,
+        }
+    }
+}
+
+impl From<OrderFlowDetail> for RawRecordDetail {
+    fn from(d: OrderFlowDetail) -> Self {
+        RawRecordDetail {
+            record: d.record.into(),
+            raw_data: d.raw_data,
+            attachments: Vec::new(),
+            audit_logs: Vec::new(),
+        }
+    }
+}
+
 pub async fn list_raw_records(filter: &RawRecordFilter) -> Result<RawRecordPage, String> {
     invoke(
         "list_raw_records_cmd",
@@ -633,28 +796,6 @@ pub async fn list_raw_records(filter: &RawRecordFilter) -> Result<RawRecordPage,
 
 pub async fn get_raw_record(id: i64) -> Result<Option<RawRecordDetail>, String> {
     invoke("get_raw_record_cmd", &serde_json::json!({"id": id})).await
-}
-
-/// 财务人员对某一批次银行流水的余额连续性进行整体确认。
-///
-/// 业务规则:Decimal 严格加减不应出现四舍五入误差,任何"余额不平"都视为真问题;
-/// 财务核对后(可能是跨日补录、合并入账、银行分笔误差等)才用本接口批量确认。
-/// 返回本次影响的行数。
-pub async fn confirm_balance_batch(batch_id: i64) -> Result<i64, String> {
-    invoke(
-        "confirm_balance_batch_cmd",
-        &serde_json::json!({"batchId": batch_id}),
-    )
-    .await
-}
-
-/// 撤销对某一批次银行流水余额连续性的整体确认(把 `balance_confirmed_at` 清空)。
-pub async fn unconfirm_balance_batch(batch_id: i64) -> Result<i64, String> {
-    invoke(
-        "unconfirm_balance_batch_cmd",
-        &serde_json::json!({"batchId": batch_id}),
-    )
-    .await
 }
 
 /// UI 列显示偏好(账套级 × 来源类型)。
@@ -753,6 +894,54 @@ pub async fn get_import_batch(batch_id: i64) -> Result<Option<ImportBatch>, Stri
         &serde_json::json!({"batchId": batch_id}),
     )
     .await
+}
+
+// =====================================================================
+// 银行流水 IPC (独立表 bank_flows)
+// =====================================================================
+
+pub async fn list_bank_flows(filter: &BankFlowFilter) -> Result<BankFlowPage, String> {
+    invoke(
+        "list_bank_flows_cmd",
+        &serde_json::json!({"filter": filter}),
+    )
+    .await
+}
+
+pub async fn get_bank_flow(id: i64) -> Result<Option<BankFlowDetail>, String> {
+    invoke("get_bank_flow_cmd", &serde_json::json!({"id": id})).await
+}
+
+pub async fn confirm_bank_balance_batch(batch_id: i64) -> Result<i64, String> {
+    invoke(
+        "confirm_bank_balance_batch_cmd",
+        &serde_json::json!({"batchId": batch_id}),
+    )
+    .await
+}
+
+pub async fn unconfirm_bank_balance_batch(batch_id: i64) -> Result<i64, String> {
+    invoke(
+        "unconfirm_bank_balance_batch_cmd",
+        &serde_json::json!({"batchId": batch_id}),
+    )
+    .await
+}
+
+// =====================================================================
+// 订单流水 IPC (独立表 order_flows)
+// =====================================================================
+
+pub async fn list_order_flows(filter: &OrderFlowFilter) -> Result<OrderFlowPage, String> {
+    invoke(
+        "list_order_flows_cmd",
+        &serde_json::json!({"filter": filter}),
+    )
+    .await
+}
+
+pub async fn get_order_flow(id: i64) -> Result<Option<OrderFlowDetail>, String> {
+    invoke("get_order_flow_cmd", &serde_json::json!({"id": id})).await
 }
 
 const IMPORT_DIR_KEY: &str = "forgefin_import_dir";

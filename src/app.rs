@@ -3,23 +3,23 @@ use leptos::prelude::*;
 use crate::auth::Session;
 use crate::components::layout::shell::AppShell;
 use crate::nav::{NavKey, NavState};
-use crate::pages::accounts::Accounts;
-use crate::pages::audit_log::AuditLog;
-use crate::pages::bank_flow::BankFlow;
-use crate::pages::chat_records::ChatRecords;
-use crate::pages::company_management::CompanyManagement;
-use crate::pages::contacts::Contacts;
+use crate::pages::banking::bank_flow::BankFlow;
+use crate::pages::banking::reconciliation::Reconciliation;
+use crate::pages::business::chat_records::ChatRecords;
+use crate::pages::business::contacts::Contacts;
+use crate::pages::business::order_flow::OrderFlow;
 use crate::pages::dashboard::Dashboard;
-use crate::pages::data_summary::DataSummary;
-use crate::pages::general_ledger::GeneralLedger;
+use crate::pages::data::data_summary::DataSummary;
+use crate::pages::data::raw_data::RawData;
+use crate::pages::financial::accounts::Accounts;
+use crate::pages::financial::general_ledger::GeneralLedger;
+use crate::pages::financial::voucher::VoucherManagement;
+use crate::pages::financial::voucher_entry::VoucherEntry;
 use crate::pages::login::Login;
-use crate::pages::order_flow::OrderFlow;
 use crate::pages::placeholder::Placeholder;
-use crate::pages::raw_data::RawData;
-use crate::pages::reconciliation::Reconciliation;
-use crate::pages::settings::Settings;
-use crate::pages::voucher::VoucherManagement;
-use crate::pages::voucher_entry::VoucherEntry;
+use crate::pages::system::audit_log::AuditLog;
+use crate::pages::system::company_management::CompanyManagement;
+use crate::pages::system::settings::Settings;
 
 #[component]
 pub fn App() -> impl IntoView {

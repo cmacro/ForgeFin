@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use lucide_leptos::{FileText, FolderOpen, ListFilter, RefreshCw};
+use lucide_leptos::{FileText, FolderOpen, ListFilter, RefreshCw, X};
 
 use crate::components::form::search_form::{FieldKind, SearchField, SelectOption};
 use crate::components::layout::tabs::{TabItem, Tabs};
@@ -137,6 +137,16 @@ fn ImportCenter(
     auto_import: Callback<()>,
     select_dir: Callback<()>,
 ) -> impl IntoView {
+    let (selected_file, set_selected_file) = signal(Option::<ipc::RawFileInfo>::None);
+
+    let on_file_select = move |file: ipc::RawFileInfo| {
+        set_selected_file.set(Some(file));
+    };
+
+    let on_close_detail = move |_| {
+        set_selected_file.set(None);
+    };
+
     view! {
         <div class="page-content">
             <div class="flex items-center justify-between mb-4">
@@ -234,29 +244,42 @@ fn ImportCenter(
 
             <ImportSingleFile />
 
-            <div class="card flex flex-col min-h-0">
-                <div class="card-header">
-                    <span class="card-title">"扫描结果"</span>
-                    <span class="text-13 text-tertiary">
-                        {move || format!("共 {} 个文件", files.get().len())}
-                    </span>
+            <div class="flex-1 min-h-0 grid grid-cols-2 gap-4" style="height: calc(100vh - 280px);">
+                <div class="card flex flex-col min-h-0">
+                    <div class="card-header">
+                        <span class="card-title">"扫描结果"</span>
+                        <span class="text-13 text-tertiary">
+                            {move || format!("共 {} 个文件", files.get().len())}
+                        </span>
+                    </div>
+                    <div class="flex-1 overflow-auto p-3">
+                        <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
+                            {move || {
+                                let list = files.get();
+                                if list.is_empty() {
+                                    view! {
+                                        <div class="empty-state">
+                                            <p class="empty-state-desc">"请输入目录并扫描以检测原始凭证文件。"</p>
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    view! {
+                                        <FileTable
+                                            files=list
+                                            selected_file=selected_file
+                                            on_select=Callback::new(on_file_select)
+                                        />
+                                    }.into_any()
+                                }
+                            }}
+                        </Suspense>
+                    </div>
                 </div>
-                <div class="flex-1 overflow-auto p-3">
-                    <Suspense fallback=|| view! { <div class="text-tertiary p-4">"加载中…"</div> }>
-                        {move || {
-                            let list = files.get();
-                            if list.is_empty() {
-                                view! {
-                                    <div class="empty-state">
-                                        <p class="empty-state-desc">"请输入目录并扫描以检测原始凭证文件。"</p>
-                                    </div>
-                                }.into_any()
-                            } else {
-                                view! { <FileTable files=list /> }.into_any()
-                            }
-                        }}
-                    </Suspense>
-                </div>
+
+                <ScannedFileDetail
+                    file=selected_file
+                    on_close=Callback::new(on_close_detail)
+                />
             </div>
         </div>
     }
@@ -466,12 +489,16 @@ fn record_search_fields() -> Vec<SearchField> {
 }
 
 #[component]
-fn FileTable(files: Vec<ipc::RawFileInfo>) -> impl IntoView {
+fn FileTable(
+    files: Vec<ipc::RawFileInfo>,
+    selected_file: ReadSignal<Option<ipc::RawFileInfo>>,
+    on_select: Callback<ipc::RawFileInfo>,
+) -> impl IntoView {
     let (importing, set_importing) = signal(Option::<String>::None);
     let (import_error, set_import_error) = signal(Option::<String>::None);
     let (files_signal, set_files) = signal(files.clone());
 
-    let import_one = move |file: ipc::RawFileInfo| {
+    let import_one = Callback::new(move |file: ipc::RawFileInfo| {
         let path = file.file_path.clone();
         let file_name = file.file_name.clone();
         set_importing.set(Some(file_name.clone()));
@@ -491,7 +518,7 @@ fn FileTable(files: Vec<ipc::RawFileInfo>) -> impl IntoView {
             }
             set_importing.set(None);
         });
-    };
+    });
 
     view! {
         <Show when=move || import_error.get().is_some()>
@@ -509,38 +536,87 @@ fn FileTable(files: Vec<ipc::RawFileInfo>) -> impl IntoView {
             </thead>
             <tbody>
                 <For each=move || files_signal.get() key=|f| f.file_path.clone() let:file>
-                    <tr>
-                        <td>{file.file_name.clone()}</td>
-                        <td>{file.source_type.clone()}</td>
-                        <td class="data-table-num">{file.row_count}</td>
-                        <td>
-                            <span class={format!("text-13 {}", file_status_class(&file.status))}>
-                                {file_status_label(&file.status)}
-                            </span>
-                        </td>
-                        <td class="text-center">
-                            {move || {
-                                let f = file.clone();
-                                if f.status == "pending" {
-                                    let busy = importing.get().as_ref() == Some(&f.file_name);
-                                    view! {
-                                        <button
-                                            class="btn btn-sm btn-primary"
-                                            on:click=move |_| import_one(f.clone())
-                                            disabled=busy
-                                        >
-                                            "导入"
-                                        </button>
-                                    }.into_any()
-                                } else {
-                                    view! { <span class="text-tertiary text-13">"—"</span> }.into_any()
-                                }
-                            }}
-                        </td>
-                    </tr>
+                    <FileRow
+                        file=file
+                        selected_file=selected_file
+                        importing=importing
+                        on_select=on_select
+                        import_one=import_one
+                    />
                 </For>
             </tbody>
         </table>
+    }
+}
+
+#[component]
+fn FileRow(
+    file: ipc::RawFileInfo,
+    selected_file: ReadSignal<Option<ipc::RawFileInfo>>,
+    importing: ReadSignal<Option<String>>,
+    on_select: Callback<ipc::RawFileInfo>,
+    import_one: Callback<ipc::RawFileInfo>,
+) -> impl IntoView {
+    let file_path = file.file_path.clone();
+    let file_name = file.file_name.clone();
+    let source_type = file.source_type.clone();
+    let row_count = file.row_count;
+    let status = file.status.clone();
+    let is_selected = move || {
+        selected_file.get().as_ref().map(|f| f.file_path.as_str()) == Some(file_path.as_str())
+    };
+
+    let file_for_click = file.clone();
+    let file_name_for_busy = file_name.clone();
+    let file_for_import_click = file.clone();
+
+    view! {
+        <tr
+            class=move || {
+                if is_selected() {
+                    "cursor-pointer hover:bg-surface transition-colors bg-surface border-l-2 border-l-brand"
+                } else {
+                    "cursor-pointer hover:bg-surface transition-colors"
+                }
+            }
+            on:click=move |_| on_select.run(file_for_click.clone())
+        >
+            <td>{file_name.clone()}</td>
+            <td>{source_type.clone()}</td>
+            <td class="data-table-num">{row_count}</td>
+            <td>
+                <span class={format!("text-13 {}", file_status_class(&status))}>
+                    {file_status_label(&status)}
+                </span>
+            </td>
+            <td class="text-center">
+                {let status2 = status.clone();
+                let f = file_for_import_click.clone();
+                let n = file_name_for_busy.clone();
+                move || {
+                    if status2 == "pending" {
+                        let busy = importing.get().as_ref() == Some(&n);
+                        let f2 = f.clone();
+                        let f3 = f2.clone();
+                        let f4 = f3.clone();
+                        view! {
+                            <button
+                                class="btn btn-sm btn-primary"
+                                on:click=move |ev| {
+                                    ev.stop_propagation();
+                                    import_one.run(f4.clone());
+                                }
+                                disabled=busy
+                            >
+                                "导入"
+                            </button>
+                        }.into_any()
+                    } else {
+                        view! { <span class="text-tertiary text-13">"—"</span> }.into_any()
+                    }
+                }}
+            </td>
+        </tr>
     }
 }
 
@@ -559,5 +635,124 @@ fn file_status_class(status: &str) -> &'static str {
         "pending" => "text-warning",
         "unsupported" => "text-danger",
         _ => "text-tertiary",
+    }
+}
+
+#[component]
+fn ScannedFileDetail(
+    file: ReadSignal<Option<ipc::RawFileInfo>>,
+    on_close: Callback<()>,
+) -> impl IntoView {
+    let (content, set_content) = signal(Option::<String>::None);
+    let (loading, set_loading) = signal(false);
+    let (error, set_error) = signal(Option::<String>::None);
+
+    let load_content = move |f: ipc::RawFileInfo| {
+        if f.file_path.is_empty() {
+            set_error.set(Some("文件路径为空".to_string()));
+            return;
+        }
+        set_loading.set(true);
+        set_error.set(None);
+        set_content.set(None);
+        let path = f.file_path.clone();
+        leptos::task::spawn_local(async move {
+            match ipc::read_source_file(path).await {
+                Ok(c) => set_content.set(Some(c)),
+                Err(e) => set_error.set(Some(format!("读取失败: {e}"))),
+            }
+            set_loading.set(false);
+        });
+    };
+
+    Effect::watch(
+        move || file.get(),
+        move |f, _, _| {
+            if let Some(f) = f {
+                load_content(f.clone());
+            }
+        },
+        true,
+    );
+
+    let source_type_label = |source_type: &str| -> String {
+        match source_type {
+            "bank_flow" => "银行流水",
+            "order_flow" => "订单流水",
+            "pos_flow" => "POS流水",
+            "summary_flow" => "数据汇总",
+            _ => source_type,
+        }
+        .to_string()
+    };
+
+    view! {
+        <div class="card flex flex-col min-h-0">
+            <div class="card-header">
+                <span class="card-title">"文件详情"</span>
+                <button class="btn btn-sm btn-outline" on:click=move |_| on_close.run(())>
+                    <X size=14 />
+                </button>
+            </div>
+            <div class="flex-1 overflow-auto p-3">
+                <Suspense fallback=|| view! { <div class="text-tertiary p-4">"请选择一个文件"</div> }>
+                    {move || {
+                        match file.get() {
+                            Some(f) => {
+                                let fn_val = f.file_name.clone();
+                                let st_val = source_type_label(&f.source_type);
+                                let rc_val = f.row_count;
+                                let status_label = file_status_label(&f.status);
+                                view! {
+                                    <>
+                                    <div class="detail-grid">
+                                        <DetailField label="文件名" value=fn_val />
+                                        <DetailField label="来源类型" value=st_val />
+                                        <DetailField label="完整路径" value=f.file_path.clone() />
+                                        <DetailField label="数据行数" value=rc_val.to_string() />
+                                        <DetailField label="状态" value=status_label.to_string() />
+                                    </div>
+                                    <div class="border-t border-border pt-3">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-13 text-secondary">"文件内容预览"</span>
+                                            <Show when=move || loading.get()>
+                                                <span class="text-13 text-tertiary">"加载中..."</span>
+                                            </Show>
+                                        </div>
+                                        <Show when=move || error.get().is_some()>
+                                            <div class="login-error mb-2 text-13">
+                                                {move || error.get().unwrap_or_default()}
+                                            </div>
+                                        </Show>
+                                        <Show when=move || content.get().is_some()>
+                                            <pre class="bg-surface p-3 rounded text-12 overflow-auto" style="max-height: calc(100vh - 480px);">
+                                                {move || content.get().unwrap_or_default()}
+                                            </pre>
+                                        </Show>
+                                    </div>
+                                    </>
+                                }.into_any()
+                            }
+                            None => view! {
+                                <div class="empty-state">
+                                    <p class="empty-state-desc">"请点击左侧文件查看详情"</p>
+                                </div>
+                            }.into_any(),
+                        }
+                    }}
+                </Suspense>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn DetailField(label: &'static str, value: String) -> impl IntoView {
+    let vc = value.clone();
+    view! {
+        <div class="detail-field">
+            <span class="detail-field-label">{label}</span>
+            <span class="detail-field-value truncate" title={vc}>{value}</span>
+        </div>
     }
 }

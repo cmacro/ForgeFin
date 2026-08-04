@@ -312,6 +312,68 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_attachments_entity
             ON attachments(entity_type, entity_id);
 
+        -- 银行流水独立表(不再写入 source_records)
+        -- import_batch_id 关联导入批次,方便追溯来源文件。
+        -- 金额字段以分为单位(INTEGER),避免浮点精度问题。
+        -- currency 为整数枚举:0=CNY,1=USD,2=EUR,3=HKD,4=JPY,5=GBP
+        CREATE TABLE IF NOT EXISTS bank_flows (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_batch_id INTEGER NOT NULL,
+            source_file_name TEXT NOT NULL,
+            source_row_no   INTEGER NOT NULL,
+            record_no       TEXT,
+            record_date     TEXT,
+            amount_in       INTEGER NOT NULL DEFAULT 0,
+            amount_out      INTEGER NOT NULL DEFAULT 0,
+            amount_total    INTEGER NOT NULL DEFAULT 0,
+            balance         INTEGER,
+            currency        INTEGER NOT NULL DEFAULT 0,
+            counterpart_info TEXT,
+            summary         TEXT,
+            raw_data        TEXT NOT NULL,
+            row_hash        TEXT,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            created_at      TEXT NOT NULL,
+            balance_confirmed_at TEXT,
+            FOREIGN KEY (import_batch_id) REFERENCES import_batches(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bank_flows_batch
+            ON bank_flows(import_batch_id);
+        CREATE INDEX IF NOT EXISTS idx_bank_flows_date
+            ON bank_flows(record_date);
+        CREATE INDEX IF NOT EXISTS idx_bank_flows_row_hash
+            ON bank_flows(row_hash);
+
+        -- 订单流水独立表(不再写入 source_records)
+        -- import_batch_id 关联导入批次,方便追溯来源文件。
+        -- 金额字段以分为单位(INTEGER)。
+        -- currency 为整数枚举:0=CNY,1=USD,2=EUR,3=HKD,4=JPY,5=GBP
+        CREATE TABLE IF NOT EXISTS order_flows (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_batch_id INTEGER NOT NULL,
+            source_file_name TEXT NOT NULL,
+            source_row_no   INTEGER NOT NULL,
+            record_no       TEXT,
+            record_date     TEXT,
+            amount_total    INTEGER NOT NULL DEFAULT 0,
+            currency        INTEGER NOT NULL DEFAULT 0,
+            counterpart_info TEXT,
+            summary         TEXT,
+            raw_data        TEXT NOT NULL,
+            row_hash        TEXT,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY (import_batch_id) REFERENCES import_batches(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_order_flows_batch
+            ON order_flows(import_batch_id);
+        CREATE INDEX IF NOT EXISTS idx_order_flows_date
+            ON order_flows(record_date);
+        CREATE INDEX IF NOT EXISTS idx_order_flows_row_hash
+            ON order_flows(row_hash);
+
         -- 导入错误明细
         CREATE TABLE IF NOT EXISTS import_errors (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,

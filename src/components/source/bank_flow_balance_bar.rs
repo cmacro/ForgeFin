@@ -66,7 +66,7 @@ pub fn BankFlowBalanceBar(items: Vec<RawRecord>, on_changed: Callback<()>) -> im
             set_pending.set(true);
             let on_changed = on_changed;
             leptos::task::spawn_local(async move {
-                match ipc::confirm_balance_batch(batch_id).await {
+                match ipc::confirm_bank_balance_batch(batch_id).await {
                     Ok(_) => on_changed.run(()),
                     Err(e) => set_error.set(Some(format!("确认失败: {e}"))),
                 }
@@ -85,7 +85,7 @@ pub fn BankFlowBalanceBar(items: Vec<RawRecord>, on_changed: Callback<()>) -> im
             set_pending.set(true);
             let on_changed = on_changed;
             leptos::task::spawn_local(async move {
-                match ipc::unconfirm_balance_batch(batch_id).await {
+                match ipc::unconfirm_bank_balance_batch(batch_id).await {
                     Ok(_) => on_changed.run(()),
                     Err(e) => set_error.set(Some(format!("撤销失败: {e}"))),
                 }
