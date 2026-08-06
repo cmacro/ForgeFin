@@ -374,6 +374,49 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_order_flows_row_hash
             ON order_flows(row_hash);
 
+        -- 数据汇总独立表(人工整理的凭证草稿,对应 数据汇总.tsv)
+        -- 金额字段以元为单位(TEXT),保留原始精度。
+        -- payment_method: debit_card / credit_card / wechat / alipay
+        -- source_info: JSON,记录生成来源追溯信息
+        CREATE TABLE IF NOT EXISTS data_summaries (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            summary_date    TEXT NOT NULL,
+            receipt_no      TEXT,
+            category        TEXT NOT NULL,
+            project         TEXT NOT NULL,
+            reason          TEXT,
+            payment_method  TEXT,
+            payment_amount  TEXT DEFAULT '0',
+            fee             TEXT DEFAULT '0',
+            actual_income   TEXT DEFAULT '0',
+            expense         TEXT DEFAULT '0',
+            balance         TEXT,
+            remarks         TEXT,
+            source_info     TEXT,
+            voucher_id      TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_data_summaries_date
+            ON data_summaries(summary_date);
+        CREATE INDEX IF NOT EXISTS idx_data_summaries_category
+            ON data_summaries(category);
+
+        -- 企业通用手续费率表
+        -- payment_method: debit_card / credit_card / wechat / alipay
+        -- rate: 费率(百分比,如 0.5 表示 0.5%)
+        CREATE TABLE IF NOT EXISTS fee_rates (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            payment_method  TEXT NOT NULL,
+            rate            TEXT NOT NULL,
+            description     TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            UNIQUE (payment_method)
+        );
+
         -- 导入错误明细
         CREATE TABLE IF NOT EXISTS import_errors (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -453,6 +496,9 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
     // 初始化默认原始凭证来源类型
     init_source_types(conn)?;
 
+    // 初始化默认手续费率
+    init_fee_rates(conn)?;
+
     Ok(())
 }
 
@@ -469,6 +515,24 @@ fn init_source_types(conn: &Connection) -> Result<(), String> {
             rusqlite::params![code, name, category],
         )
         .map_err(|e| format!("初始化来源类型失败: {e}"))?;
+    }
+    Ok(())
+}
+
+fn init_fee_rates(conn: &Connection) -> Result<(), String> {
+    let rates = [
+        ("debit_card", "0.5", "借记卡"),
+        ("credit_card", "0.6", "信用卡(贷记卡)"),
+        ("wechat", "0.25", "微信支付"),
+        ("alipay", "0.25", "支付宝"),
+    ];
+    for (method, rate, desc) in rates {
+        conn.execute(
+            "INSERT OR IGNORE INTO fee_rates (payment_method, rate, description, is_active, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, datetime('now'), datetime('now'))",
+            rusqlite::params![method, rate, desc],
+        )
+        .map_err(|e| format!("初始化手续费率失败: {e}"))?;
     }
     Ok(())
 }

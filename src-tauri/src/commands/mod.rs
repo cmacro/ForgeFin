@@ -3,6 +3,8 @@ pub mod backup;
 pub mod bank_flow;
 pub mod company;
 pub mod contact;
+pub mod data_summary;
+pub mod fee_rate;
 pub mod order_flow;
 pub mod raw;
 pub mod session;

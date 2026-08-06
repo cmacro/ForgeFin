@@ -905,6 +905,135 @@ pub async fn get_import_batch(batch_id: i64) -> Result<Option<ImportBatch>, Stri
 }
 
 // =====================================================================
+// 数据汇总 IPC (独立表 data_summaries)
+// =====================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSummaryRecord {
+    pub id: i64,
+    pub summary_date: String,
+    pub receipt_no: Option<String>,
+    pub category: String,
+    pub project: String,
+    pub reason: Option<String>,
+    pub payment_method: Option<String>,
+    pub payment_amount: String,
+    pub fee: String,
+    pub actual_income: String,
+    pub expense: String,
+    pub balance: Option<String>,
+    pub remarks: Option<String>,
+    pub source_info: Option<String>,
+    pub voucher_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSummaryInput {
+    pub summary_date: String,
+    pub receipt_no: Option<String>,
+    pub category: String,
+    pub project: String,
+    pub reason: Option<String>,
+    pub payment_method: Option<String>,
+    pub payment_amount: Option<String>,
+    pub fee: Option<String>,
+    pub actual_income: Option<String>,
+    pub expense: Option<String>,
+    pub balance: Option<String>,
+    pub remarks: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DataSummaryFilter {
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+    pub category: Option<String>,
+    pub project: Option<String>,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DataSummaryPage {
+    pub items: Vec<DataSummaryRecord>,
+    pub total: i32,
+    pub page: i32,
+    pub page_size: i32,
+}
+
+pub async fn list_data_summaries(filter: &DataSummaryFilter) -> Result<DataSummaryPage, String> {
+    invoke(
+        "list_data_summaries_cmd",
+        &serde_json::json!({"filter": filter}),
+    )
+    .await
+}
+
+pub async fn get_data_summary(id: i64) -> Result<Option<DataSummaryRecord>, String> {
+    invoke("get_data_summary_cmd", &serde_json::json!({"id": id})).await
+}
+
+pub async fn create_data_summary(input: &DataSummaryInput) -> Result<DataSummaryRecord, String> {
+    invoke(
+        "create_data_summary_cmd",
+        &serde_json::json!({"input": input}),
+    )
+    .await
+}
+
+pub async fn update_data_summary(
+    id: i64,
+    input: &DataSummaryInput,
+) -> Result<DataSummaryRecord, String> {
+    invoke(
+        "update_data_summary_cmd",
+        &serde_json::json!({"id": id, "input": input}),
+    )
+    .await
+}
+
+pub async fn delete_data_summary(id: i64) -> Result<(), String> {
+    invoke("delete_data_summary_cmd", &serde_json::json!({"id": id})).await
+}
+
+// =====================================================================
+// 手续费率 IPC
+// =====================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FeeRate {
+    pub id: i64,
+    pub payment_method: String,
+    pub rate: String,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FeeRateInput {
+    pub payment_method: String,
+    pub rate: String,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+pub async fn list_fee_rates() -> Result<Vec<FeeRate>, String> {
+    invoke("list_fee_rates_cmd", &()).await
+}
+
+pub async fn update_fee_rate(id: i64, input: &FeeRateInput) -> Result<FeeRate, String> {
+    invoke(
+        "update_fee_rate_cmd",
+        &serde_json::json!({"id": id, "input": input}),
+    )
+    .await
+}
+
+// =====================================================================
 // 银行流水 IPC (独立表 bank_flows)
 // =====================================================================
 

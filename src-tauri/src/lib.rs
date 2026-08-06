@@ -75,6 +75,15 @@ pub fn run() {
             // order flow (独立表)
             order_flow::list_order_flows_cmd,
             order_flow::get_order_flow_cmd,
+            // data summary (独立表)
+            data_summary::list_data_summaries_cmd,
+            data_summary::get_data_summary_cmd,
+            data_summary::create_data_summary_cmd,
+            data_summary::update_data_summary_cmd,
+            data_summary::delete_data_summary_cmd,
+            // fee rates
+            fee_rate::list_fee_rates_cmd,
+            fee_rate::update_fee_rate_cmd,
             // ui prefs (列显示等)
             ui_prefs::get_column_prefs_cmd,
             ui_prefs::save_column_prefs_cmd,
