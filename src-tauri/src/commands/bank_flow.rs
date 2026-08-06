@@ -1,16 +1,12 @@
 use std::collections::HashMap;
-use std::path::Path;
 
-use chrono::Local;
 use rusqlite::OptionalExtension;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tauri::State;
 
 use crate::commands::raw::{
-    compute_balance_check_status, fetch_balance_check_rows, now_str, with_company_conn,
-    BalanceCheckRow,
+    compute_balance_check_status, now_str, with_company_conn, BalanceCheckRow,
 };
 use crate::commands::session::SessionState;
 use crate::db::DbState;
@@ -28,8 +24,6 @@ fn cents_to_yuan(cents: i64) -> String {
 pub struct BankFlowRecord {
     pub id: i64,
     pub import_batch_id: i64,
-    pub source_file_name: String,
-    pub source_row_no: i32,
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_in: Option<String>,
@@ -41,7 +35,6 @@ pub struct BankFlowRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
-    pub file_path: String,
     #[serde(default)]
     pub balance_check_status: Option<String>,
     #[serde(default)]
@@ -67,6 +60,9 @@ pub struct BankFlowPage {
 pub struct BankFlowDetail {
     pub record: BankFlowRecord,
     pub raw_data: String,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub file_path: String,
 }
 
 // =====================================================================
@@ -105,12 +101,11 @@ pub fn list_bank_flows_core(
         .map_err(|e| format!("统计银行流水失败: {e}"))?;
 
     let list_sql = format!(
-        "SELECT bf.id, bf.import_batch_id, bf.source_file_name, bf.source_row_no,
+        "SELECT bf.id, bf.import_batch_id,
                 bf.record_no, bf.record_date, bf.amount_in, bf.amount_out, bf.amount_total,
                 bf.balance, bf.currency, bf.counterpart_info, bf.summary,
-                bf.status, bf.created_at, ib.file_path, bf.balance_confirmed_at
+                bf.status, bf.created_at, bf.balance_confirmed_at
          FROM bank_flows bf
-         LEFT JOIN import_batches ib ON bf.import_batch_id = ib.id
          {where_clause}
          ORDER BY bf.record_date DESC, bf.id DESC
          LIMIT ? OFFSET ?"
@@ -126,29 +121,26 @@ pub fn list_bank_flows_core(
         .query_map(rusqlite::params_from_iter(list_refs.iter()), |row| {
             let id: i64 = row.get(0)?;
             let balance_check_status = balance_check_map.get(&id).cloned();
-            let amount_in_cents: Option<i64> = row.get(6)?;
-            let amount_out_cents: Option<i64> = row.get(7)?;
-            let amount_total_cents: Option<i64> = row.get(8)?;
-            let balance_cents: Option<i64> = row.get(9)?;
+            let amount_in_cents: Option<i64> = row.get(4)?;
+            let amount_out_cents: Option<i64> = row.get(5)?;
+            let amount_total_cents: Option<i64> = row.get(6)?;
+            let balance_cents: Option<i64> = row.get(7)?;
             Ok(BankFlowRecord {
                 id,
                 import_batch_id: row.get(1)?,
-                source_file_name: row.get(2)?,
-                source_row_no: row.get(3)?,
-                record_no: row.get(4)?,
-                record_date: row.get(5)?,
+                record_no: row.get(2)?,
+                record_date: row.get(3)?,
                 amount_in: amount_in_cents.map(cents_to_yuan),
                 amount_out: amount_out_cents.map(cents_to_yuan),
                 amount_total: amount_total_cents.map(cents_to_yuan),
                 balance: balance_cents.map(cents_to_yuan),
-                currency: row.get(10)?,
-                counterpart_info: row.get(11)?,
-                summary: row.get(12)?,
-                status: row.get(13)?,
-                created_at: row.get(14)?,
-                file_path: row.get::<_, Option<String>>(15)?.unwrap_or_default(),
+                currency: row.get(8)?,
+                counterpart_info: row.get(9)?,
+                summary: row.get(10)?,
+                status: row.get(11)?,
+                created_at: row.get(12)?,
                 balance_check_status,
-                balance_confirmed_at: row.get(16)?,
+                balance_confirmed_at: row.get(13)?,
             })
         })
         .map_err(|e| format!("查询银行流水失败: {e}"))?
@@ -169,48 +161,47 @@ pub fn get_bank_flow_core(
 ) -> Result<Option<BankFlowDetail>, String> {
     let record_opt = conn
         .query_row(
-            "SELECT bf.id, bf.import_batch_id, bf.source_file_name, bf.source_row_no,
+            "SELECT bf.id, bf.import_batch_id,
                     bf.record_no, bf.record_date, bf.amount_in, bf.amount_out, bf.amount_total,
                     bf.balance, bf.currency, bf.counterpart_info, bf.summary,
-                    bf.status, bf.created_at, bf.raw_data, ib.file_path, bf.balance_confirmed_at
+                    bf.status, bf.created_at, bf.raw_data,
+                    bf.source_file_name, bf.source_row_no, bf.balance_confirmed_at
              FROM bank_flows bf
-             LEFT JOIN import_batches ib ON bf.import_batch_id = ib.id
              WHERE bf.id = ?1",
             rusqlite::params![id],
             |row| {
-                let amount_in_cents: Option<i64> = row.get(6)?;
-                let amount_out_cents: Option<i64> = row.get(7)?;
-                let amount_total_cents: Option<i64> = row.get(8)?;
-                let balance_cents: Option<i64> = row.get(9)?;
+                let amount_in_cents: Option<i64> = row.get(4)?;
+                let amount_out_cents: Option<i64> = row.get(5)?;
+                let amount_total_cents: Option<i64> = row.get(6)?;
+                let balance_cents: Option<i64> = row.get(7)?;
                 Ok((
                     BankFlowRecord {
                         id: row.get(0)?,
                         import_batch_id: row.get(1)?,
-                        source_file_name: row.get(2)?,
-                        source_row_no: row.get(3)?,
-                        record_no: row.get(4)?,
-                        record_date: row.get(5)?,
+                        record_no: row.get(2)?,
+                        record_date: row.get(3)?,
                         amount_in: amount_in_cents.map(cents_to_yuan),
                         amount_out: amount_out_cents.map(cents_to_yuan),
                         amount_total: amount_total_cents.map(cents_to_yuan),
                         balance: balance_cents.map(cents_to_yuan),
-                        currency: row.get(10)?,
-                        counterpart_info: row.get(11)?,
-                        summary: row.get(12)?,
-                        status: row.get(13)?,
-                        created_at: row.get(14)?,
-                        file_path: row.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                        currency: row.get(8)?,
+                        counterpart_info: row.get(9)?,
+                        summary: row.get(10)?,
+                        status: row.get(11)?,
+                        created_at: row.get(12)?,
                         balance_check_status: None,
-                        balance_confirmed_at: row.get(17)?,
+                        balance_confirmed_at: row.get(16)?,
                     },
-                    row.get::<_, String>(15)?,
+                    row.get::<_, String>(13)?,
+                    row.get::<_, String>(14)?,
+                    row.get::<_, i32>(15)?,
                 ))
             },
         )
         .optional()
         .map_err(|e| format!("查询银行流水详情失败: {e}"))?;
 
-    let Some((mut record, raw_data)) = record_opt else {
+    let Some((mut record, raw_data, source_file_name, source_row_no)) = record_opt else {
         return Ok(None);
     };
 
@@ -219,7 +210,24 @@ pub fn get_bank_flow_core(
     let map = compute_balance_check_status(&check_rows);
     record.balance_check_status = map.get(&record.id).cloned();
 
-    Ok(Some(BankFlowDetail { record, raw_data }))
+    // 查询文件路径
+    let file_path = conn
+        .query_row(
+            "SELECT file_path FROM import_batches WHERE id = ?1",
+            rusqlite::params![record.import_batch_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    Ok(Some(BankFlowDetail {
+        record,
+        raw_data,
+        source_file_name,
+        source_row_no,
+        file_path,
+    }))
 }
 
 /// 从 bank_flows 表拉取余额连续性校验所需的轻量数据
@@ -228,7 +236,7 @@ fn fetch_bank_balance_check_rows(
 ) -> Result<Vec<BalanceCheckRow>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT bf.id, bf.balance, bf.raw_data
+            "SELECT bf.id, bf.balance, bf.amount_in, bf.amount_out
              FROM bank_flows bf
              ORDER BY bf.record_date ASC, bf.id ASC",
         )
@@ -238,7 +246,8 @@ fn fetch_bank_balance_check_rows(
             Ok(BalanceCheckRow {
                 id: row.get(0)?,
                 balance: row.get(1)?,
-                raw_data: row.get(2)?,
+                amount_in: row.get(2)?,
+                amount_out: row.get(3)?,
             })
         })
         .map_err(|e| format!("查询余额校验数据失败: {e}"))?

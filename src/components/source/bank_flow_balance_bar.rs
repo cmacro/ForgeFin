@@ -49,7 +49,9 @@ pub fn BankFlowBalanceBar(items: Vec<RawRecord>, on_changed: Callback<()>) -> im
             Some(id) => !map.contains_key(&id),
         };
         if needs_reset {
-            set_selected_batch.set(first_batch_id);
+            if let Some(id) = first_batch_id {
+                set_selected_batch.set(Some(id));
+            }
         }
     });
 

@@ -37,10 +37,14 @@ pub fn column_label(key: &str) -> &'static str {
 }
 
 /// 全部列默认可见(账套首次打开时使用)。
+/// source_file_name / source_row_no 默认隐藏,来源信息在详情面板展示。
 pub fn default_columns() -> BTreeMap<String, bool> {
     COLUMN_KEYS
         .iter()
-        .map(|k| ((*k).to_string(), true))
+        .map(|k| {
+            let visible = !matches!(*k, "source_file_name" | "source_row_no");
+            ((*k).to_string(), visible)
+        })
         .collect()
 }
 

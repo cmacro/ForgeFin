@@ -1,5 +1,5 @@
-use rust_decimal::Decimal;
 use rusqlite::OptionalExtension;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -20,8 +20,6 @@ fn cents_to_yuan(cents: i64) -> String {
 pub struct OrderFlowRecord {
     pub id: i64,
     pub import_batch_id: i64,
-    pub source_file_name: String,
-    pub source_row_no: i32,
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_total: Option<String>,
@@ -30,7 +28,6 @@ pub struct OrderFlowRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
-    pub file_path: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -52,6 +49,9 @@ pub struct OrderFlowPage {
 pub struct OrderFlowDetail {
     pub record: OrderFlowRecord,
     pub raw_data: String,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub file_path: String,
 }
 
 // =====================================================================
@@ -84,12 +84,11 @@ pub fn list_order_flows_core(
         .map_err(|e| format!("统计订单流水失败: {e}"))?;
 
     let list_sql = format!(
-        "SELECT of.id, of.import_batch_id, of.source_file_name, of.source_row_no,
+        "SELECT of.id, of.import_batch_id,
                 of.record_no, of.record_date, of.amount_total,
                 of.currency, of.counterpart_info, of.summary,
-                of.status, of.created_at, ib.file_path
+                of.status, of.created_at
          FROM order_flows of
-         LEFT JOIN import_batches ib ON of.import_batch_id = ib.id
          {where_clause}
          ORDER BY of.record_date DESC, of.id DESC
          LIMIT ? OFFSET ?"
@@ -103,21 +102,18 @@ pub fn list_order_flows_core(
         .map_err(|e| format!("查询订单流水失败: {e}"))?;
     let items = stmt
         .query_map(rusqlite::params_from_iter(list_refs.iter()), |row| {
-            let amount_total_cents: Option<i64> = row.get(6)?;
+            let amount_total_cents: Option<i64> = row.get(4)?;
             Ok(OrderFlowRecord {
                 id: row.get(0)?,
                 import_batch_id: row.get(1)?,
-                source_file_name: row.get(2)?,
-                source_row_no: row.get(3)?,
-                record_no: row.get(4)?,
-                record_date: row.get(5)?,
+                record_no: row.get(2)?,
+                record_date: row.get(3)?,
                 amount_total: amount_total_cents.map(cents_to_yuan),
-                currency: row.get(7)?,
-                counterpart_info: row.get(8)?,
-                summary: row.get(9)?,
-                status: row.get(10)?,
-                created_at: row.get(11)?,
-                file_path: row.get::<_, Option<String>>(12)?.unwrap_or_default(),
+                currency: row.get(5)?,
+                counterpart_info: row.get(6)?,
+                summary: row.get(7)?,
+                status: row.get(8)?,
+                created_at: row.get(9)?,
             })
         })
         .map_err(|e| format!("查询订单流水失败: {e}"))?
@@ -138,44 +134,59 @@ pub fn get_order_flow_core(
 ) -> Result<Option<OrderFlowDetail>, String> {
     let record_opt = conn
         .query_row(
-            "SELECT of.id, of.import_batch_id, of.source_file_name, of.source_row_no,
+            "SELECT of.id, of.import_batch_id,
                     of.record_no, of.record_date, of.amount_total,
                     of.currency, of.counterpart_info, of.summary,
-                    of.status, of.created_at, of.raw_data, ib.file_path
+                    of.status, of.created_at, of.raw_data,
+                    of.source_file_name, of.source_row_no
              FROM order_flows of
-             LEFT JOIN import_batches ib ON of.import_batch_id = ib.id
              WHERE of.id = ?1",
             rusqlite::params![id],
             |row| {
-                let amount_total_cents: Option<i64> = row.get(6)?;
+                let amount_total_cents: Option<i64> = row.get(4)?;
                 Ok((
                     OrderFlowRecord {
                         id: row.get(0)?,
                         import_batch_id: row.get(1)?,
-                        source_file_name: row.get(2)?,
-                        source_row_no: row.get(3)?,
-                        record_no: row.get(4)?,
-                        record_date: row.get(5)?,
+                        record_no: row.get(2)?,
+                        record_date: row.get(3)?,
                         amount_total: amount_total_cents.map(cents_to_yuan),
-                        currency: row.get(7)?,
-                        counterpart_info: row.get(8)?,
-                        summary: row.get(9)?,
-                        status: row.get(10)?,
-                        created_at: row.get(11)?,
-                        file_path: row.get::<_, Option<String>>(13)?.unwrap_or_default(),
+                        currency: row.get(5)?,
+                        counterpart_info: row.get(6)?,
+                        summary: row.get(7)?,
+                        status: row.get(8)?,
+                        created_at: row.get(9)?,
                     },
-                    row.get::<_, String>(12)?,
+                    row.get::<_, String>(10)?,
+                    row.get::<_, String>(11)?,
+                    row.get::<_, i32>(12)?,
                 ))
             },
         )
         .optional()
         .map_err(|e| format!("查询订单流水详情失败: {e}"))?;
 
-    let Some((record, raw_data)) = record_opt else {
+    let Some((record, raw_data, source_file_name, source_row_no)) = record_opt else {
         return Ok(None);
     };
 
-    Ok(Some(OrderFlowDetail { record, raw_data }))
+    let file_path = conn
+        .query_row(
+            "SELECT file_path FROM import_batches WHERE id = ?1",
+            rusqlite::params![record.import_batch_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    Ok(Some(OrderFlowDetail {
+        record,
+        raw_data,
+        source_file_name,
+        source_row_no,
+        file_path,
+    }))
 }
 
 // =====================================================================

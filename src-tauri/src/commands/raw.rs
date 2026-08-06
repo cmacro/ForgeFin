@@ -1367,37 +1367,23 @@ pub fn list_raw_records_core(
     })
 }
 
-/// 余额连续性校验的轻量数据(从 raw_data 抽取必要字段)
+/// 余额连续性校验的轻量数据(从 bank_flows 表直接读取金额列,避免解析 raw_data JSON)
 #[derive(Debug)]
 pub(crate) struct BalanceCheckRow {
     pub(crate) id: i64,
-    pub(crate) balance: Option<String>,
-    /// raw_data JSON 字符串
-    pub(crate) raw_data: String,
-}
-
-/// 解析 raw_data JSON,提取"转入金额"、"转出金额"。
-/// 银行流水 TSV 字段名为"转入金额"和"转出金额",返回的元组表示(in, out)绝对值。
-/// 任意字段缺失或解析失败返回 None。
-fn parse_amount_from_raw_data(raw_data: &str) -> Option<(Decimal, Decimal)> {
-    let v: serde_json::Value = serde_json::from_str(raw_data).ok()?;
-    let obj = v.as_object()?;
-    let in_amt = obj
-        .get("转入金额")
-        .and_then(|x| x.as_str())
-        .and_then(|s| parse_amount(s))?;
-    let out_amt = obj
-        .get("转出金额")
-        .and_then(|x| x.as_str())
-        .and_then(|s| parse_amount(s))?;
-    Some((in_amt, out_amt))
+    /// 余额(分),None 表示无余额数据
+    pub(crate) balance: Option<i64>,
+    /// 转入金额(分)
+    pub(crate) amount_in: i64,
+    /// 转出金额(分)
+    pub(crate) amount_out: i64,
 }
 
 /// 对一批银行流水的轻量数据,正序遍历,计算每行的余额连续性状态。
 /// 返回 `id -> status` 映射,status 取值:
 /// - `"ok"`:本行余额与(prev + in - out)严格相等(Decimal 严格加减,不需要容差)
 /// - `"mismatch"`:不一致 — 需财务人员确认;确认后 UI 不再显示红底
-/// - `"skip"`:无法计算(余额为空/缺转入或转出/无上一行)
+/// - `"skip"`:无法计算(余额为空/无上一行)
 pub fn compute_balance_check_status(
     rows: &[BalanceCheckRow],
 ) -> std::collections::HashMap<i64, String> {
@@ -1405,19 +1391,17 @@ pub fn compute_balance_check_status(
     let mut prev_balance: Option<Decimal> = None;
 
     for row in rows {
-        let cur_balance = row.balance.as_deref().and_then(parse_amount);
+        let cur_balance = row.balance.map(|c| Decimal::new(c, 2));
 
         let status = match (prev_balance, cur_balance) {
             (Some(prev), Some(cur)) => {
-                if let Some((in_amt, out_amt)) = parse_amount_from_raw_data(&row.raw_data) {
-                    let expected = prev + in_amt - out_amt;
-                    if expected == cur {
-                        "ok".to_string()
-                    } else {
-                        "mismatch".to_string()
-                    }
+                let in_amt = Decimal::new(row.amount_in, 2);
+                let out_amt = Decimal::new(row.amount_out, 2);
+                let expected = prev + in_amt - out_amt;
+                if expected == cur {
+                    "ok".to_string()
                 } else {
-                    "skip".to_string()
+                    "mismatch".to_string()
                 }
             }
             _ => "skip".to_string(),
@@ -1434,12 +1418,13 @@ pub fn compute_balance_check_status(
 /// 拉取所有 bank_flows 的轻量数据(用于余额连续性校验)。
 ///
 /// 用于计算余额连续性,需要全量正序遍历,因此不分页。
+/// 直接从 amount_in/amount_out 列读取(整数分),避免解析 raw_data JSON。
 pub(crate) fn fetch_balance_check_rows(
     conn: &rusqlite::Connection,
     _source_type: Option<&str>,
 ) -> Result<Vec<BalanceCheckRow>, String> {
     let mut sql = String::from(
-        "SELECT bf.id, bf.balance, bf.raw_data
+        "SELECT bf.id, bf.balance, bf.amount_in, bf.amount_out
          FROM bank_flows bf",
     );
     let params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -1454,7 +1439,8 @@ pub(crate) fn fetch_balance_check_rows(
             Ok(BalanceCheckRow {
                 id: row.get(0)?,
                 balance: row.get(1)?,
-                raw_data: row.get(2)?,
+                amount_in: row.get(2)?,
+                amount_out: row.get(3)?,
             })
         })
         .map_err(|e| format!("查询余额校验数据失败: {e}"))?
@@ -2810,7 +2796,8 @@ mod tests {
         let rows = fetch_balance_check_rows(&conn, Some("bank_flow")).expect("fetch");
         let map = compute_balance_check_status(&rows);
         let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
-        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("skip"));
+        // 第 2 行转出金额为空,导入时存为 0,因此余额连续性计算仍可进行
+        assert_eq!(map.get(&ids[1]).map(|s| s.as_str()), Some("ok"));
 
         let _ = std::fs::remove_file(&bank);
     }

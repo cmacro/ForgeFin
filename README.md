@@ -89,6 +89,22 @@
 - 不引入 ORM，使用 `rusqlite` 直接操作，保持精简
 - 连接池 (`r2d2`) 按需管理每个数据库文件的连接
 
+### 数据库文件位置
+
+所有数据库文件存放在系统应用数据目录下的 `ForgeFin/` 文件夹：
+
+```
+~/.local/share/ForgeFin/
+├── forgefin_system.db          # 系统库：用户、公司注册信息
+├── companies/
+│   └── forgefin_company_{id}.db # 各公司独立业务库
+└── backups/                     # 自动备份
+```
+
+> **WSL / Linux**: `~/.local/share/ForgeFin/`
+> **macOS**: `~/Library/Application Support/ForgeFin/`
+> **Windows**: `C:\Users\<用户名>\AppData\Local\ForgeFin\`
+
 ### 工作流
 
 按工作流组织：

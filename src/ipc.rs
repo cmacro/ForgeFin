@@ -631,8 +631,6 @@ pub struct VoucherSummary {
 pub struct BankFlowRecord {
     pub id: i64,
     pub import_batch_id: i64,
-    pub source_file_name: String,
-    pub source_row_no: i32,
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_in: Option<String>,
@@ -644,7 +642,6 @@ pub struct BankFlowRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
-    pub file_path: String,
     #[serde(default)]
     pub balance_check_status: Option<String>,
     #[serde(default)]
@@ -670,6 +667,9 @@ pub struct BankFlowPage {
 pub struct BankFlowDetail {
     pub record: BankFlowRecord,
     pub raw_data: String,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub file_path: String,
 }
 
 impl From<BankFlowRecord> for RawRecord {
@@ -679,8 +679,8 @@ impl From<BankFlowRecord> for RawRecord {
             source_type: "bank_flow".to_string(),
             source_type_name: "银行流水".to_string(),
             import_batch_id: b.import_batch_id,
-            source_file_name: b.source_file_name,
-            source_row_no: b.source_row_no,
+            source_file_name: String::new(),
+            source_row_no: 0,
             record_no: b.record_no,
             record_date: b.record_date,
             amount_total: b.amount_total,
@@ -690,7 +690,7 @@ impl From<BankFlowRecord> for RawRecord {
             summary: b.summary,
             status: b.status,
             created_at: b.created_at,
-            file_path: b.file_path,
+            file_path: String::new(),
             balance_check_status: b.balance_check_status,
             balance_confirmed_at: b.balance_confirmed_at,
         }
@@ -699,8 +699,12 @@ impl From<BankFlowRecord> for RawRecord {
 
 impl From<BankFlowDetail> for RawRecordDetail {
     fn from(d: BankFlowDetail) -> Self {
+        let mut record: RawRecord = d.record.into();
+        record.source_file_name = d.source_file_name;
+        record.source_row_no = d.source_row_no;
+        record.file_path = d.file_path;
         RawRecordDetail {
-            record: d.record.into(),
+            record,
             raw_data: d.raw_data,
             attachments: Vec::new(),
             audit_logs: Vec::new(),
@@ -716,8 +720,6 @@ impl From<BankFlowDetail> for RawRecordDetail {
 pub struct OrderFlowRecord {
     pub id: i64,
     pub import_batch_id: i64,
-    pub source_file_name: String,
-    pub source_row_no: i32,
     pub record_no: Option<String>,
     pub record_date: Option<String>,
     pub amount_total: Option<String>,
@@ -726,7 +728,6 @@ pub struct OrderFlowRecord {
     pub summary: Option<String>,
     pub status: String,
     pub created_at: String,
-    pub file_path: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -748,6 +749,9 @@ pub struct OrderFlowPage {
 pub struct OrderFlowDetail {
     pub record: OrderFlowRecord,
     pub raw_data: String,
+    pub source_file_name: String,
+    pub source_row_no: i32,
+    pub file_path: String,
 }
 
 impl From<OrderFlowRecord> for RawRecord {
@@ -757,8 +761,8 @@ impl From<OrderFlowRecord> for RawRecord {
             source_type: "order_flow".to_string(),
             source_type_name: "订单流水".to_string(),
             import_batch_id: o.import_batch_id,
-            source_file_name: o.source_file_name,
-            source_row_no: o.source_row_no,
+            source_file_name: String::new(),
+            source_row_no: 0,
             record_no: o.record_no,
             record_date: o.record_date,
             amount_total: o.amount_total,
@@ -768,7 +772,7 @@ impl From<OrderFlowRecord> for RawRecord {
             summary: o.summary,
             status: o.status,
             created_at: o.created_at,
-            file_path: o.file_path,
+            file_path: String::new(),
             balance_check_status: None,
             balance_confirmed_at: None,
         }
@@ -777,8 +781,12 @@ impl From<OrderFlowRecord> for RawRecord {
 
 impl From<OrderFlowDetail> for RawRecordDetail {
     fn from(d: OrderFlowDetail) -> Self {
+        let mut record: RawRecord = d.record.into();
+        record.source_file_name = d.source_file_name;
+        record.source_row_no = d.source_row_no;
+        record.file_path = d.file_path;
         RawRecordDetail {
-            record: d.record.into(),
+            record,
             raw_data: d.raw_data,
             attachments: Vec::new(),
             audit_logs: Vec::new(),

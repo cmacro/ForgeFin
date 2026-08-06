@@ -50,6 +50,16 @@ Do not place reusable components directly inside page files.
 
 ---
 
+## Changelog Rules
+
+Feature changelog files are stored in `docs/changelogs/`.
+
+Naming convention: `YYYYMMDD_feature_name.md` (date first, then feature name).
+
+Example: `20260806_pubacc_contact_assign.md`
+
+---
+
 ## Required Skills
 
 The following skills must be applied based on the task type.
