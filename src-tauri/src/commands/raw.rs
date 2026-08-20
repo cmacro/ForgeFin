@@ -145,6 +145,21 @@ pub(crate) fn now_str() -> String {
     Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+/// 将 bank_flows / order_flows 表中的整数币种编码转换为字符串代码。
+/// 编码采用 ISO 4217 数字编码(https://en.wikipedia.org/wiki/ISO_4217)。
+pub(crate) fn currency_code(code: i64) -> String {
+    match code {
+        156 => "CNY",
+        840 => "USD",
+        978 => "EUR",
+        344 => "HKD",
+        392 => "JPY",
+        826 => "GBP",
+        _ => "CNY",
+    }
+    .to_string()
+}
+
 fn count_data_rows(path: &Path) -> Result<i32, String> {
     let content =
         fs::read_to_string(path).map_err(|e| format!("读取文件失败 ({}): {e}", path.display()))?;
@@ -555,7 +570,7 @@ fn parse_and_insert_records(
                  (import_batch_id, source_file_name, source_row_no, record_no, record_date,
                   amount_in, amount_out, amount_total, balance, currency, counterpart_info,
                   summary, raw_data, row_hash, status, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10, ?11, ?12, ?13, 'pending', ?14)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 156, ?10, ?11, ?12, ?13, 'pending', ?14)",
                 rusqlite::params![
                     import_batch_id,
                     source_file_name,
@@ -629,7 +644,7 @@ fn parse_and_insert_records(
                 "INSERT INTO order_flows
                  (import_batch_id, source_file_name, source_row_no, record_no, record_date,
                   amount_total, currency, counterpart_info, summary, raw_data, row_hash, status, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8, ?9, ?10, 'pending', ?11)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 156, ?7, ?8, ?9, ?10, 'pending', ?11)",
                 rusqlite::params![
                     import_batch_id,
                     source_file_name,

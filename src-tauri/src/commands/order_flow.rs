@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::commands::raw::{now_str, with_company_conn};
+use crate::commands::raw::{currency_code, now_str, with_company_conn};
 use crate::commands::session::SessionState;
 use crate::db::DbState;
 
@@ -109,7 +109,7 @@ pub fn list_order_flows_core(
                 record_no: row.get(2)?,
                 record_date: row.get(3)?,
                 amount_total: amount_total_cents.map(cents_to_yuan),
-                currency: row.get(5)?,
+                currency: currency_code(row.get(5)?),
                 counterpart_info: row.get(6)?,
                 summary: row.get(7)?,
                 status: row.get(8)?,
@@ -151,7 +151,7 @@ pub fn get_order_flow_core(
                         record_no: row.get(2)?,
                         record_date: row.get(3)?,
                         amount_total: amount_total_cents.map(cents_to_yuan),
-                        currency: row.get(5)?,
+                        currency: currency_code(row.get(5)?),
                         counterpart_info: row.get(6)?,
                         summary: row.get(7)?,
                         status: row.get(8)?,

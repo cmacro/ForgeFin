@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::commands::raw::{
-    compute_balance_check_status, now_str, with_company_conn, BalanceCheckRow,
+    compute_balance_check_status, currency_code, now_str, with_company_conn, BalanceCheckRow,
 };
 use crate::commands::session::SessionState;
 use crate::db::DbState;
@@ -134,7 +134,7 @@ pub fn list_bank_flows_core(
                 amount_out: amount_out_cents.map(cents_to_yuan),
                 amount_total: amount_total_cents.map(cents_to_yuan),
                 balance: balance_cents.map(cents_to_yuan),
-                currency: row.get(8)?,
+                currency: currency_code(row.get(8)?),
                 counterpart_info: row.get(9)?,
                 summary: row.get(10)?,
                 status: row.get(11)?,
@@ -184,7 +184,7 @@ pub fn get_bank_flow_core(
                         amount_out: amount_out_cents.map(cents_to_yuan),
                         amount_total: amount_total_cents.map(cents_to_yuan),
                         balance: balance_cents.map(cents_to_yuan),
-                        currency: row.get(8)?,
+                        currency: currency_code(row.get(8)?),
                         counterpart_info: row.get(9)?,
                         summary: row.get(10)?,
                         status: row.get(11)?,

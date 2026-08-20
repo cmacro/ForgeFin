@@ -315,7 +315,7 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
         -- 银行流水独立表(不再写入 source_records)
         -- import_batch_id 关联导入批次,方便追溯来源文件。
         -- 金额字段以分为单位(INTEGER),避免浮点精度问题。
-        -- currency 为整数枚举:0=CNY,1=USD,2=EUR,3=HKD,4=JPY,5=GBP
+        -- currency 采用 ISO 4217 数字编码:156=CNY,840=USD,978=EUR,344=HKD,392=JPY,826=GBP
         CREATE TABLE IF NOT EXISTS bank_flows (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             import_batch_id INTEGER NOT NULL,
@@ -327,7 +327,7 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             amount_out      INTEGER NOT NULL DEFAULT 0,
             amount_total    INTEGER NOT NULL DEFAULT 0,
             balance         INTEGER,
-            currency        INTEGER NOT NULL DEFAULT 0,
+            currency        INTEGER NOT NULL DEFAULT 156,
             counterpart_info TEXT,
             summary         TEXT,
             raw_data        TEXT NOT NULL,
@@ -348,7 +348,7 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
         -- 订单流水独立表(不再写入 source_records)
         -- import_batch_id 关联导入批次,方便追溯来源文件。
         -- 金额字段以分为单位(INTEGER)。
-        -- currency 为整数枚举:0=CNY,1=USD,2=EUR,3=HKD,4=JPY,5=GBP
+        -- currency 采用 ISO 4217 数字编码:156=CNY,840=USD,978=EUR,344=HKD,392=JPY,826=GBP
         CREATE TABLE IF NOT EXISTS order_flows (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             import_batch_id INTEGER NOT NULL,
@@ -357,7 +357,7 @@ pub fn init_company(conn: &Connection) -> Result<(), String> {
             record_no       TEXT,
             record_date     TEXT,
             amount_total    INTEGER NOT NULL DEFAULT 0,
-            currency        INTEGER NOT NULL DEFAULT 0,
+            currency        INTEGER NOT NULL DEFAULT 156,
             counterpart_info TEXT,
             summary         TEXT,
             raw_data        TEXT NOT NULL,
