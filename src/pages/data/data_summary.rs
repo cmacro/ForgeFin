@@ -20,7 +20,7 @@ fn source_label(info: &Option<String>) -> (&'static str, &'static str) {
     }
 }
 
-fn payment_method_label(m: &str) -> &'static str {
+fn payment_method_label(m: &str) -> &str {
     match m {
         "debit_card" => "借记卡",
         "credit_card" => "信用卡",
@@ -137,6 +137,7 @@ pub fn DataSummary() -> impl IntoView {
                 {move || Suspend::new(async move {
                     match data.await {
                         Ok(p) => {
+                            let is_empty = p.items.is_empty();
                             view! {
                                 <div class="card">
                                     <table class="data-table" style="border:none">
@@ -172,7 +173,7 @@ pub fn DataSummary() -> impl IntoView {
                                                     </td>
                                                     <td>{row.project.clone()}</td>
                                                     <td class="text-secondary">{row.reason.clone().unwrap_or_default()}</td>
-                                                    <td>{row.payment_method.as_ref().map(|m| payment_method_label(m)).unwrap_or_default()}</td>
+                                                    <td>{row.payment_method.as_ref().map(|m| payment_method_label(m).to_string()).unwrap_or_default()}</td>
                                                     <td class="data-table-num">{row.payment_amount.clone()}</td>
                                                     <td class="data-table-num">{row.fee.clone()}</td>
                                                     <td class="data-table-num text-money">{row.actual_income.clone()}</td>
@@ -211,11 +212,18 @@ pub fn DataSummary() -> impl IntoView {
                                             </For>
                                         </tbody>
                                     </table>
-                                    <Show when=move || p.items.is_empty()>
+                                    <Show when=move || is_empty>
                                         <div class="empty-state">
                                             <p class="empty-state-desc">"暂无数据汇总记录,点击「新增汇总」开始。"</p>
                                         </div>
                                     </Show>
+                                </div>
+                            }.into_any()
+                        }
+                        Err(e) => view! {
+                            <div class="login-error">{format!("加载数据汇总失败: {e}")}</div>
+                        }.into_any(),
+                    }
                 })}
             </Suspense>
         </div>
@@ -356,7 +364,7 @@ fn DataSummaryEditModal(
 
     let title_static: &'static str = "数据汇总编辑";
     view! {
-        <Modal open=open title=title_static size="lg" on_close=Callback::new(close)>
+        <Modal open=open title=title_static size=Some("lg") on_close=Callback::new(close)>
             <div class="modal-form">
                 <div class="modal-form-row">
                     <div class="form-field">
@@ -543,7 +551,7 @@ fn FeeRateModal(open: ReadSignal<bool>, set_open: WriteSignal<bool>) -> impl Int
 
     let title_static: &'static str = "手续费率管理";
     view! {
-        <Modal open=open title=title_static size="sm" on_close=Callback::new(close)>
+        <Modal open=open title=title_static size=Some("sm") on_close=Callback::new(close)>
             <div class="modal-form">
                 <div class="text-13 text-secondary mb-3">
                     "设置各支付方式的默认手续费率(百分比)。修改后新增汇总记录时自动引用。"
