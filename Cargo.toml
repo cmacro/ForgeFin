@@ -19,3 +19,12 @@ tracing = "0.1"
 
 [workspace]
 members = ["src-tauri"]
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+# Profiles must live in the workspace root manifest.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
