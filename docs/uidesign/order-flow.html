@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订单流水 · ForgeFin</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.nav-item.sub { padding: 5px 16px 5px 32px; font-size: 12.5px; }
+.nav-item.sub svg { width: 13px; height: 13px; }
+.nav-group-title { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 7px 16px 3px; font-size: 11px; letter-spacing: .04em; color: var(--color-sidebar-muted); }
+.nav-group-title .chev { width: 11px; height: 11px; }
+.nav-count { margin-left: auto; font-size: 10.5px; color: var(--color-sidebar-muted); }
+.nav-split { height: 1px; margin: 6px 12px; background: var(--color-sidebar-hover); }
+.btn .ico { width: 14px; height: 14px; }
+.theme-toggle .i-sun { display: none; }
+html.dark .theme-toggle .i-sun { display: block; }
+html.dark .theme-toggle .i-moon { display: none; }
+
+.toolbar { gap: 8px; }
+.search { position: relative; display: flex; align-items: center; }
+.search .ico { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--color-tertiary); pointer-events: none; }
+.search .input { width: 200px; min-width: 0; padding-left: 28px; }
+.date-range { display: flex; align-items: center; gap: 6px; }
+.date-range .input { width: 130px; min-width: 0; font-family: var(--mono); font-size: 12.5px; padding: 0 8px; }
+.date-sep { font-size: 12px; color: var(--color-tertiary); }
+.toolbar .select { min-width: 118px; max-width: 150px; }
+.switch { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 2px; font-size: 13px; color: var(--color-secondary); cursor: pointer; white-space: nowrap; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track { position: relative; width: 30px; height: 17px; border-radius: 999px; background: var(--color-disabled); transition: background var(--transition-fast); flex: 0 0 auto; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--color-surface); box-shadow: var(--shadow-xs); transition: transform var(--transition-fast); }
+.switch input:checked + .track { background: var(--color-brand); }
+.switch input:checked + .track::after { transform: translateX(13px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+
+.kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kpi { padding: 8px 14px 9px; }
+.kpi-label { display: flex; align-items: center; gap: 6px; }
+.kpi-value { font-size: 22px; text-align: left; }
+.kpi-value .unit { font-size: 12px; font-weight: 400; color: var(--color-tertiary); margin-left: 4px; }
+.kpi-sub { margin-top: 1px; }
+
+.flow-table { table-layout: fixed; min-width: 1158px; }
+.flow-table thead th { padding: 7px 10px; }
+.flow-table tbody td { height: 30px; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-table tbody tr { cursor: pointer; }
+.flow-table .mono-sm { font-family: var(--mono); font-size: 11px; color: var(--color-secondary); }
+.flow-table .tcell { line-height: 1.28; }
+.flow-table .tcell .tm { color: var(--color-tertiary); }
+.flow-table td.money { text-align: right; font-family: var(--mono); font-size: 12.5px; }
+.flow-table td.na { text-align: right; color: var(--color-tertiary); font-family: var(--mono); }
+.flow-table .coll { color: var(--color-secondary); font-size: 12.5px; }
+.flow-table .coll.todo { color: var(--color-warning); }
+.ops-link { border: 0; background: none; padding: 0; font-size: 12.5px; color: var(--color-brand-active); cursor: pointer; }
+.ops-link:hover { text-decoration: underline; }
+.sb-sep { width: 1px; height: 12px; background: var(--color-divider); }
+.status-bar b { font-family: var(--mono); font-weight: 600; color: var(--color-secondary); }
+.pg { height: 26px; min-width: 26px; padding: 0 7px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); font-size: 12px; color: var(--color-secondary); }
+.pg[disabled] { color: var(--color-disabled); background: var(--color-surface-alt); cursor: not-allowed; }
+
+.drawer { width: 480px; }
+.drawer-head .mono { margin-left: auto; font-size: 11.5px; color: var(--color-tertiary); }
+.drawer-body { gap: 14px; }
+.d-title { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-secondary); }
+.d-title::before { content: ""; width: 2px; height: 11px; border-radius: 1px; background: var(--color-brand); }
+.d-sec { display: flex; flex-direction: column; gap: 8px; }
+.kv2 { grid-template-columns: 84px 1fr; font-size: 12.5px; gap: 7px 10px; }
+.kv2 dd.mono { font-size: 12px; }
+.d-hint { margin: 0; font-size: 12px; color: var(--color-tertiary); }
+.calc { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
+.calc-row { display: grid; grid-template-columns: 18px 92px minmax(0, 1fr) 100px; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px; border-bottom: 1px solid var(--color-border-light); }
+.calc-row:last-child { border-bottom: 0; }
+.calc-row .op { color: var(--color-tertiary); font-family: var(--mono); }
+.calc-row .lbl { color: var(--color-secondary); }
+.calc-row .note { color: var(--color-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calc-row .val { font-family: var(--mono); text-align: right; color: var(--color-primary); }
+.calc-row.sum { background: var(--color-surface-alt); }
+.calc-row.sum .lbl { color: var(--color-primary); font-weight: 600; }
+.calc-row.diff { background: var(--color-warning-soft); }
+.calc-row.diff .lbl, .calc-row.diff .val { color: var(--color-warning); font-weight: 600; }
+.calc-row.diff.zero { background: var(--color-success-soft); }
+.calc-row.diff.zero .lbl, .calc-row.diff.zero .val { color: var(--color-success); }
+.fee-edit { display: flex; flex-direction: column; gap: 5px; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); }
+.fee-edit-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.fee-edit-row .label { font-size: 12.5px; }
+.fee-edit-row .input { width: 132px; height: 30px; margin-left: auto; font-size: 12.5px; }
+.fee-edit .d-hint { display: flex; align-items: center; gap: 5px; }
+.fee-edit .d-hint .ico { width: 12px; height: 12px; }
+details.json summary { cursor: pointer; font-size: 12px; color: var(--color-brand-active); list-style: none; display: inline-flex; align-items: center; gap: 5px; }
+details.json summary::-webkit-details-marker { display: none; }
+details.json summary::before { content: "▸"; font-size: 10px; }
+details.json[open] summary::before { content: "▾"; }
+.json-pre { margin: 7px 0 0; padding: 10px; max-height: 196px; overflow: auto; background: var(--color-surface-alt); border: 1px solid var(--color-border-light); border-radius: var(--radius-md); font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--color-secondary); }
+
+.toast { position: fixed; right: 20px; bottom: 20px; display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); font-size: 12.5px; color: var(--color-primary); opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity var(--transition-fast), transform var(--transition-fast); z-index: 60; }
+.toast.show { opacity: 1; transform: none; }
+.toast .ico { width: 14px; height: 14px; color: var(--color-brand); }
+html.dark .ops-link, html.dark details.json summary, html.dark .toast .ico { color: var(--color-brand-hover); }
+.empty-row { height: 96px; text-align: center; color: var(--color-tertiary); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2 8 2.5l5.5 4.7V13a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5z"/><path d="M6.3 13.5V9.4h3.4v4.1"/></symbol>
+<symbol id="i-ledger" viewBox="0 0 16 16"><path d="M3.2 2.6h8.3a1.3 1.3 0 0 1 1.3 1.3v9.5H4.5a1.3 1.3 0 0 1-1.3-1.3z"/><path d="M3.2 11.3a1.3 1.3 0 0 1 1.3-1.3h8.3"/></symbol>
+<symbol id="i-report" viewBox="0 0 16 16"><path d="M2.5 13.5h11"/><path d="M4.7 11V7.4M8 11V4.4M11.3 11V8.8"/></symbol>
+<symbol id="i-receive" viewBox="0 0 16 16"><path d="M8 2.8v6.6M5.4 6.8 8 9.4l2.6-2.6"/><path d="M2.8 11.6v1.6h10.4v-1.6"/></symbol>
+<symbol id="i-pay" viewBox="0 0 16 16"><path d="M8 13.2V6.6M5.4 9.2 8 6.6l2.6 2.6"/><path d="M2.8 4.4V2.8h10.4v1.6"/></symbol>
+<symbol id="i-asset" viewBox="0 0 16 16"><path d="M2.6 5.4 8 2.6l5.4 2.8v5.2L8 13.4l-5.4-2.8z"/><path d="M2.6 5.4 8 8.2l5.4-2.8M8 8.2v5.2"/></symbol>
+<symbol id="i-cashier" viewBox="0 0 16 16"><path d="M2.6 5.4h10.8v7.2H2.6z"/><path d="M2.6 5.4 11 2.8v2.6"/><path d="M10.6 9h2.8"/></symbol>
+<symbol id="i-budget" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 2.6V8h5.4"/></symbol>
+<symbol id="i-tax" viewBox="0 0 16 16"><path d="M12 4 4 12"/><circle cx="4.8" cy="4.8" r="1.5"/><circle cx="11.2" cy="11.2" r="1.5"/></symbol>
+<symbol id="i-import" viewBox="0 0 16 16"><path d="M8 10.4V2.8M5.4 5.4 8 2.8l2.6 2.6"/><path d="M2.8 10.2v3h10.4v-3"/></symbol>
+<symbol id="i-recon" viewBox="0 0 16 16"><path d="M2.8 6h9.4L9.8 3.6"/><path d="M13.2 10H3.8l2.4 2.4"/></symbol>
+<symbol id="i-audit" viewBox="0 0 16 16"><path d="M2.8 3.4h7.4M2.8 7h5.4M2.8 10.6h3.6"/><path d="M9.6 11.2l1.7 1.7 2.9-3.3"/></symbol>
+<symbol id="i-bank" viewBox="0 0 16 16"><path d="M2.6 6.4 8 3l5.4 3.4"/><path d="M4.2 6.9v5M8 6.9v5M11.8 6.9v5M2.6 13.2h10.8"/></symbol>
+<symbol id="i-order" viewBox="0 0 16 16"><path d="M4 2.8h8v10.4l-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M6 6.2h4M6 9h4"/></symbol>
+<symbol id="i-store" viewBox="0 0 16 16"><path d="M3 6.6h10V13H3z"/><path d="M2.8 6.6 3.9 3h8.2l1.1 3.6M6.4 9.6h3.2"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16"><path d="M2.8 3.4h10.4v7.2H7.6L4.2 13.2v-2.6H2.8z"/></symbol>
+<symbol id="i-sum" viewBox="0 0 16 16"><rect x="2.6" y="2.6" width="4.4" height="4.4" rx=".8"/><rect x="9" y="2.6" width="4.4" height="4.4" rx=".8"/><rect x="2.6" y="9" width="4.4" height="4.4" rx=".8"/><rect x="9" y="9" width="4.4" height="4.4" rx=".8"/></symbol>
+<symbol id="i-book" viewBox="0 0 16 16"><rect x="2.6" y="3" width="10.8" height="4" rx="1"/><rect x="2.6" y="9" width="10.8" height="4" rx="1"/></symbol>
+<symbol id="i-set" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.6v1.8M8 11.6v1.8M2.6 8h1.8M11.6 8h1.8M4.2 4.2l1.3 1.3M10.5 10.5l1.3 1.3M11.8 4.2l-1.3 1.3M5.5 10.5l-1.3 1.3"/></symbol>
+<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.6 6.4 8 9.8l3.4-3.4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 16 16"><path d="M12.8 8a4.8 4.8 0 1 1-1.4-3.4"/><path d="M13 2.6v3.2h-3.2"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9.4 4.4 13 8l-3.6 3.6"/></symbol>
+<symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.4 6.4 11.6 12.8 4.8"/></symbol>
+<symbol id="i-search" viewBox="0 0 16 16"><circle cx="7.2" cy="7.2" r="4.4"/><path d="M10.6 10.6 13.6 13.6"/></symbol>
+<symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.8v7M5.4 7.2 8 9.8l2.6-2.6"/><path d="M2.8 12.4h10.4"/></symbol>
+<symbol id="i-close" viewBox="0 0 16 16"><path d="M4.4 4.4 11.6 11.6M11.6 4.4 4.4 11.6"/></symbol>
+<symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 7.2v3.6M8 5.4v.01"/></symbol>
+<symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.5M8 12.7v1.5M1.8 8h1.5M12.7 8h1.5M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16"><path d="M12.6 9.6A5.2 5.2 0 0 1 6.4 3.4 5.4 5.4 0 1 0 12.6 9.6z"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="sidebar" data-od-id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">F</div>
+      <div class="brand-name">ForgeFin</div>
+      <span class="brand-sub">示例账套</span>
+    </div>
+    <nav class="nav scrollbar-thin" aria-label="主导航">
+      <a class="nav-item" href="index.html"><svg><use href="#i-home"/></svg>首页</a>
+      <a class="nav-item" href="#"><svg><use href="#i-ledger"/></svg>总账</a>
+      <a class="nav-item" href="#"><svg><use href="#i-report"/></svg>报表中心</a>
+      <a class="nav-item" href="#"><svg><use href="#i-receive"/></svg>应收管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-pay"/></svg>应付管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-asset"/></svg>固定资产</a>
+      <a class="nav-item" href="#"><svg><use href="#i-cashier"/></svg>出纳管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-budget"/></svg>预算管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-tax"/></svg>税务管理</a>
+      <div class="nav-group-title"><svg class="chev"><use href="#i-chev"/></svg>原始凭证<span class="nav-count">8</span></div>
+      <a class="nav-item sub" href="import-center.html"><svg><use href="#i-import"/></svg>导入中心</a>
+      <a class="nav-item sub" href="reconciliation.html"><svg><use href="#i-recon"/></svg>对账中心<span class="nav-badge">6</span></a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-audit"/></svg>审计日志</a>
+      <a class="nav-item sub" href="bank-flow.html"><svg><use href="#i-bank"/></svg>银行流水</a>
+      <a class="nav-item sub active" href="order-flow.html" aria-current="page"><svg><use href="#i-order"/></svg>订单流水</a>
+      <a class="nav-item sub" href="store-collection.html"><svg><use href="#i-store"/></svg>店面收款</a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-chat"/></svg>聊天记录</a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-sum"/></svg>数据汇总</a>
+      <div class="nav-split"></div>
+      <a class="nav-item" href="#"><svg><use href="#i-book"/></svg>账套管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-set"/></svg>系统设置</a>
+    </nav>
+    <div class="nav-foot"><span class="dot"></span>账套正常 · 2026 年度</div>
+  </aside>
+
+  <div class="main">
+    <header class="header" data-od-id="header">
+      <div class="crumb">
+        <span class="crumb-group">原始凭证</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb-current">订单流水</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn theme-toggle" id="theme-btn" data-od-id="theme-toggle" aria-label="切换浅色或深色主题">
+          <svg class="ico i-sun"><use href="#i-sun"/></svg>
+          <svg class="ico i-moon"><use href="#i-moon"/></svg>
+          <span id="theme-label">深色</span>
+        </button>
+        <button class="btn btn-icon" id="refresh-btn" title="刷新" aria-label="刷新"><svg class="ico"><use href="#i-refresh"/></svg></button>
+        <a class="btn btn-primary" href="import-center.html" data-od-id="goto-import"><span>前往导入中心</span><svg class="ico"><use href="#i-arrow"/></svg></a>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="toolbar" data-od-id="toolbar">
+        <div class="search">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input class="input" id="q" type="search" placeholder="第三方 / 工行订单号" aria-label="关键字搜索">
+        </div>
+        <div class="date-range">
+          <input class="input" id="d-from" type="date" value="2026-02-01" aria-label="交易时间起">
+          <span class="date-sep">至</span>
+          <input class="input" id="d-to" type="date" value="2026-03-01" aria-label="交易时间止">
+        </div>
+        <select class="select" id="f-pay" aria-label="支付方式">
+          <option value="">全部支付方式</option>
+          <option value="微信">微信</option>
+          <option value="支付宝">支付宝</option>
+          <option value="银联">银联</option>
+          <option value="借记卡">借记卡</option>
+        </select>
+        <select class="select" id="f-period" aria-label="会计期间">
+          <option value="2026-02">2026 年 2 月</option>
+          <option value="2026-01">2026 年 1 月</option>
+          <option value="2026-Q1">2026 年第一季度</option>
+        </select>
+        <label class="switch" title="仅显示费率或实收异常的订单">
+          <input type="checkbox" id="f-diff"><span class="track"></span>仅看费率差异
+        </label>
+        <div class="toolbar-spacer"></div>
+        <button class="btn" id="export-btn"><svg class="ico"><use href="#i-download"/></svg>导出</button>
+      </div>
+
+      <div class="kpi-strip" data-od-id="kpi-strip">
+        <div class="kpi">
+          <div class="kpi-label">订单金额合计</div>
+          <div class="kpi-value text-money" id="k-amt">0.00<span class="unit">元</span></div>
+          <div class="kpi-sub" id="k-amt-sub">13 笔 · 2026-02-28 至 2026-03-01</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">手续费合计</div>
+          <div class="kpi-value text-money" id="k-fee">0.00<span class="unit">元</span></div>
+          <div class="kpi-sub">费率区间 0.38% – 0.60%</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">商户实收合计</div>
+          <div class="kpi-value text-money" id="k-net">0.00<span class="unit">元</span></div>
+          <div class="kpi-sub" id="k-net-sub">1 笔手续费解析失败，未计入</div>
+        </div>
+      </div>
+
+      <div class="table-wrap scrollbar-thin" data-od-id="order-flow-table">
+        <table class="data-table flow-table">
+          <colgroup>
+            <col style="width:98px"><col style="width:156px"><col style="width:150px"><col style="width:82px">
+            <col style="width:100px"><col style="width:92px"><col style="width:108px"><col style="width:96px">
+            <col style="width:88px"><col style="width:132px"><col style="width:56px">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>交易时间</th><th>第三方订单号</th><th>工行订单号</th><th>支付方式</th>
+              <th class="num">交易金额</th><th class="num">手续费</th><th class="num">商户实收</th>
+              <th>费率检查</th><th>归集状态</th><th>关联凭证</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <div class="status-bar" data-od-id="page-footer">
+        <div class="footer-stats"><span class="footer-hint">选中单元格或拖拽框选区域，页脚显示合计 / 平均 / 数量 / 最大 / 最小</span></div>
+        <div class="footer-right">
+          <span class="footer-total">共 13 行 · 命中 <b id="hit-count">13</b> 行</span>
+          <span class="footer-total">费率差异 <b id="c-fee" class="text-warning">2</b> 笔 · 实收差异 <b id="c-net" class="text-danger">1</b> 笔</span>
+          <div class="pager"><span>50 行 / 页</span><button class="pg" disabled aria-label="上一页">‹</button><button class="pg" disabled>1</button><button class="pg" disabled aria-label="下一页">›</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" aria-hidden="true" data-od-id="detail-drawer">
+  <div class="drawer-head">
+    <h2 id="d-title">订单详情</h2>
+    <span class="mono" id="d-no"></span>
+    <button class="btn btn-icon btn-ghost" id="d-close" aria-label="关闭详情"><svg class="ico"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="drawer-body scrollbar-thin" id="d-body"></div>
+  <div class="drawer-foot">
+    <button class="btn" id="d-close2">关闭</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><svg class="ico"><use href="#i-check"/></svg><span id="toast-text"></span></div>
+
+<script>
+(function () {
+  var DATA = [
+    {d:'2026-02-28',t:'08:41:12',o3:'42000023192026022811',oi:'ICBC20260228008112',pay:'微信',rate:0.6,amt:12800,fee:76.8,net:12723.2,chk:'matched',coll:'collected',vch:'记-2026-0228-0031'},
+    {d:'2026-02-28',t:'09:15:47',o3:'42000023192026022812',oi:'ICBC20260228009154',pay:'支付宝',rate:0.55,amt:6400,fee:35.2,net:6364.8,chk:'matched',coll:'collected',vch:'记-2026-0228-0031'},
+    {d:'2026-02-28',t:'09:52:03',o3:'62000000982026022813',oi:'ICBC20260228009520',pay:'银联',rate:0.38,amt:3680,fee:13.98,net:3666.02,chk:'matched',coll:'collected',vch:'记-2026-0228-0031'},
+    {d:'2026-02-28',t:'10:33:28',o3:'42000023192026022814',oi:'ICBC20260228010332',pay:'微信',rate:0.6,amt:8960,fee:53.76,net:8906.24,chk:'matched',coll:'collected',vch:'记-2026-0228-0032'},
+    {d:'2026-02-28',t:'11:07:55',o3:'62000000982026022815',oi:'ICBC20260228011075',pay:'借记卡',rate:0.5,amt:2400,fee:12,net:2388,chk:'matched',coll:'collected',vch:'记-2026-0228-0032'},
+    {d:'2026-02-28',t:'12:18:36',o3:'42000023192026022816',oi:'ICBC20260228012183',pay:'支付宝',rate:0.55,amt:8600,fee:50.6,net:8549.4,chk:'fee_diff',coll:'collected',vch:'记-2026-0228-0033'},
+    {d:'2026-02-28',t:'13:44:09',o3:'42000023192026022817',oi:'ICBC20260228013440',pay:'微信',rate:0.6,amt:15200,fee:91.2,net:15108.8,chk:'matched',coll:'collected',vch:'记-2026-0228-0033'},
+    {d:'2026-02-28',t:'14:26:51',o3:'62000000982026022818',oi:'ICBC20260228014268',pay:'银联',rate:0.38,amt:5200,fee:19.76,net:5180.24,chk:'matched',coll:'collected',vch:'记-2026-0228-0034'},
+    {d:'2026-02-28',t:'15:09:33',o3:'42000023192026022819',oi:'ICBC20260228015093',pay:'借记卡',rate:0.5,amt:1200,fee:6,net:1182.8,chk:'net_diff',coll:'collected',vch:'记-2026-0228-0034'},
+    {d:'2026-02-28',t:'16:22:14',o3:'42000023192026022820',oi:'ICBC20260228016221',pay:'支付宝',rate:0.55,amt:9800,fee:51.9,net:9748.1,chk:'fee_diff',coll:'collected',vch:'记-2026-0228-0035'},
+    {d:'2026-02-28',t:'17:05:42',o3:'42000023192026022821',oi:'ICBC20260228017054',pay:'微信',rate:0.6,amt:4300,fee:null,net:null,chk:'fee_parse_err',coll:'todo',vch:null},
+    {d:'2026-02-28',t:'18:31:07',o3:'62000000982026022822',oi:'ICBC20260228018310',pay:'银联',rate:0.38,amt:2700,fee:10.26,net:2689.74,chk:'pending',coll:'todo',vch:null},
+    {d:'2026-03-01',t:'09:08:22',o3:'42000023192026030101',oi:'ICBC20260301009082',pay:'微信',rate:0.6,amt:6800,fee:40.8,net:6759.2,chk:'matched',coll:'none',vch:null}
+  ];
+  var LABEL = {matched:'已匹配',fee_diff:'费率差异',net_diff:'实收差异',fee_parse_err:'解析失败',pending:'待勾稽'};
+  var TAG = {matched:'tag-success',fee_diff:'tag-pending',net_diff:'tag-danger',fee_parse_err:'tag-danger',pending:'tag-draft'};
+  var COLL = {collected:'已归集',todo:'待汇总',none:'未归集'};
+  var $ = function (id) { return document.getElementById(id); };
+  function money(n) { return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function expFee(r) { return Math.round(r.amt * r.rate) / 100; }
+  var tEl = $('toast'), tTx = $('toast-text'), tTimer;
+  function toast(m) { tTx.textContent = m; tEl.classList.add('show'); clearTimeout(tTimer); tTimer = setTimeout(function () { tEl.classList.remove('show'); }, 2600); }
+  function fvals() { return {q:$('q').value.trim().toLowerCase(),from:$('d-from').value,to:$('d-to').value,pay:$('f-pay').value,period:$('f-period').value,diff:$('f-diff').checked}; }
+  function rows() {
+    var f = fvals();
+    return DATA.slice().sort(function (a,b) { return (b.d+b.t)>(a.d+a.t)?1:-1; }).filter(function (r) {
+      if (f.q && (r.o3+r.oi).toLowerCase().indexOf(f.q) < 0) return false;
+      if (f.from && r.d < f.from) return false;
+      if (f.to && r.d > f.to) return false;
+      if (f.pay && r.pay !== f.pay) return false;
+      if (f.period === '2026-02' && r.d.indexOf('2026-02') !== 0) return false;
+      if (f.period === '2026-01') return false;
+      if (f.diff && r.chk !== 'fee_diff' && r.chk !== 'net_diff') return false;
+      return true;
+    });
+  }
+  function render() {
+    var list = rows();
+    $('rows').innerHTML = list.map(function (r) {
+      var cls = r.chk === 'net_diff' ? ' class="row-danger"' : (r.chk === 'fee_diff' ? ' class="row-warning"' : '');
+      var feeCell = r.fee == null ? '<td class="na">—</td>' : '<td class="money text-money">' + money(r.fee) + '</td>';
+      var netCell = r.net == null ? '<td class="na">—</td>' : '<td class="money text-money">' + money(r.net) + '</td>';
+      return '<tr' + cls + ' tabindex="0" data-o3="' + r.o3 + '">' +
+        '<td class="tcell"><div class="mono-sm">' + r.d + '</div><div class="mono-sm tm">' + r.t + '</div></td>' +
+        '<td class="mono-sm" title="' + r.o3 + '">' + r.o3 + '</td>' +
+        '<td class="mono-sm" title="' + r.oi + '">' + r.oi + '</td>' +
+        '<td><span class="tag tag-plain tag-draft">' + r.pay + '</span></td>' +
+        '<td class="money text-money">' + money(r.amt) + '</td>' + feeCell + netCell +
+        '<td><span class="tag tag-plain ' + TAG[r.chk] + '">' + LABEL[r.chk] + '</span></td>' +
+        '<td class="coll' + (r.coll === 'todo' ? ' todo' : '') + '">' + COLL[r.coll] + '</td>' +
+        '<td class="mono-sm">' + (r.vch || '—') + '</td>' +
+        '<td><button class="ops-link" type="button">查看</button></td></tr>';
+    }).join('') || '<tr><td colspan="11" class="empty-row">当前筛选无订单流水 · 调整时间区间 / 会计期间后重试，1 月账期尚未导入订单批次。</td></tr>';
+    var aSum = 0, fSum = 0, nSum = 0, miss = 0;
+    DATA.forEach(function (r) { aSum += r.amt; if (r.fee == null) miss++; else { fSum += r.fee; nSum += r.net; } });
+    $('hit-count').textContent = list.length;
+    $('k-amt').innerHTML = money(aSum) + '<span class="unit">元</span>';
+    $('k-fee').innerHTML = money(fSum) + '<span class="unit">元</span>';
+    $('k-net').innerHTML = money(nSum) + '<span class="unit">元</span>';
+    $('k-amt-sub').textContent = DATA.length + ' 笔 · 2026-02-28 至 2026-03-01';
+    $('k-net-sub').textContent = miss + ' 笔手续费解析失败，未计入实收';
+    $('c-fee').textContent = DATA.filter(function (r) { return r.chk === 'fee_diff'; }).length;
+    $('c-net').textContent = DATA.filter(function (r) { return r.chk === 'net_diff'; }).length;
+  }
+
+  var scrim = $('scrim'), drawer = $('drawer'), cur = null;
+  function openDrawer(o3) {
+    var r = DATA.filter(function (x) { return x.o3 === o3; })[0];
+    if (!r) return;
+    cur = r;
+    var exp = expFee(r), diff = r.fee == null ? null : r.fee - exp;
+    var calcRows = '<div class="calc-row"><span class="op">×</span><span class="lbl">费率</span><span class="note">' +
+        r.pay + ' 通道费率</span><span class="val">' + r.rate.toFixed(2) + '%</span></div>' +
+      '<div class="calc-row"><span class="op">=</span><span class="lbl">应收手续费</span><span class="note">交易金额 × 费率（四舍五入到分）</span><span class="val">' + money(exp) + '</span></div>' +
+      '<div class="calc-row sum"><span class="op"></span><span class="lbl">原始手续费</span><span class="note">来源：order_flow_' + r.d.replace(/-/g,'') + '.csv</span><span class="val">' + (r.fee == null ? '解析失败' : money(r.fee)) + '</span></div>';
+    if (r.fee == null) {
+      calcRows += '<div class="calc-row diff"><span class="op"></span><span class="lbl">复算结果</span><span class="note">原始手续费字段含非数字内容，需在导入中心修正列映射</span><span class="val">—</span></div>';
+    } else {
+      calcRows += '<div class="calc-row diff' + (Math.abs(diff) < 0.005 ? ' zero' : '') + '" id="calc-diff"><span class="op"></span><span class="lbl">差异</span><span class="note">原始手续费 − 应收手续费</span><span class="val" id="calc-diff-val">' + (diff > 0 ? '+' : '') + money(diff) + '</span></div>';
+      if (r.chk === 'net_diff' && r.net != null) calcRows += '<div class="calc-row diff"><span class="op"></span><span class="lbl">实收差异</span><span class="note">应有 ' + money(r.amt - r.fee) + ' · 实收 ' + money(r.net) + '</span><span class="val">' + money(r.net - (r.amt - r.fee)) + '</span></div>';
+    }
+    var settle = '<dl class="kv kv2">' +
+      '<dt>结算日期</dt><dd class="mono">' + (r.d === '2026-02-28' ? '2026-03-01' : '2026-03-02') + '</dd>' +
+      '<dt>收入归属</dt><dd class="mono">' + (r.d === '2026-02-28' ? '2026-03-01（T+1）' : '2026-03-02（T+1）') + '</dd>' +
+      '<dt>清算批次</dt><dd class="mono">QC-' + r.d.replace(/-/g,'') + '-02</dd>' +
+      '<dt>到账账户</dt><dd class="mono">1001****7575</dd></dl>';
+    var coll = r.coll === 'collected'
+      ? '<dl class="kv kv2"><dt>汇总单号</dt><dd class="mono">SM-' + r.d.replace(/-/g,'') + '-01</dd>' +
+        '<dt>汇总状态</dt><dd><span class="tag tag-plain tag-posted">已生成</span></dd>' +
+        '<dt>归集凭证</dt><dd class="mono">' + (r.vch || '—') + '</dd>' +
+        '<dt>归集日期</dt><dd class="mono">2026-03-01</dd></dl>'
+      : '<p class="d-hint">该订单尚未归集进数据汇总：' + (r.chk === 'fee_parse_err' ? '手续费解析失败，需先修正原始字段。' : '等待对账中心勾稽后生成汇总。') + '</p>';
+    var raw = {trade_time:r.d + ' ' + r.t,third_order_no:r.o3,icbc_order_no:r.oi,pay_channel:r.pay,fee_rate:r.rate.toFixed(2),amount:r.amt.toFixed(2),fee:r.fee == null ? '解析失败: "—"' : r.fee.toFixed(2),merchant_net:r.net == null ? null : r.net.toFixed(2),rate_check:r.chk,collect_status:r.coll,source_file:'order_flow_' + r.d.replace(/-/g,'') + '.csv'};
+    $('d-no').textContent = r.o3;
+    $('d-body').innerHTML =
+      '<div class="d-sec"><div class="d-title">核心字段</div><dl class="kv kv2">' +
+        '<dt>交易时间</dt><dd class="mono">' + r.d + ' ' + r.t + '</dd>' +
+        '<dt>第三方单号</dt><dd class="mono">' + r.o3 + '</dd>' +
+        '<dt>工行单号</dt><dd class="mono">' + r.oi + '</dd>' +
+        '<dt>支付方式</dt><dd>' + r.pay + ' · 费率 ' + r.rate.toFixed(2) + '%</dd>' +
+        '<dt>交易金额</dt><dd class="mono">' + money(r.amt) + ' 元</dd>' +
+        '<dt>商户实收</dt><dd class="mono">' + (r.net == null ? '—' : money(r.net) + ' 元') + '</dd>' +
+        '<dt>费率检查</dt><dd><span class="tag tag-plain ' + TAG[r.chk] + '">' + LABEL[r.chk] + '</span></dd></dl></div>' +
+      '<div class="d-sec"><div class="d-title">费率复算</div><div class="calc">' +
+        '<div class="calc-row"><span class="op"></span><span class="lbl">交易金额</span><span class="note">订单实付金额</span><span class="val">' + money(r.amt) + '</span></div>' +
+        calcRows + '</div></div>' +
+      '<div class="d-sec"><div class="d-title">手动调整手续费</div><div class="fee-edit">' +
+        '<div class="fee-edit-row"><label class="label" for="d-fee">复算手续费</label>' +
+        '<input class="input input-money" id="d-fee" type="text" value="' + (r.fee == null ? exp.toFixed(2) : r.fee.toFixed(2)) + '" aria-label="复算手续费"></div>' +
+        '<p class="d-hint"><svg class="ico"><use href="#i-info"/></svg>仅影响本地复算视图，不改原始值。</p></div></div>' +
+      '<div class="d-sec"><div class="d-title">结算与收入归属</div>' + settle + '</div>' +
+      '<div class="d-sec"><div class="d-title">数据汇总归集</div>' + coll + '</div>' +
+      '<div class="d-sec"><details class="json"><summary>原始 JSON 摘要</summary><pre class="json-pre">' + esc(JSON.stringify(raw,null,2)) + '</pre></details></div>';
+    var input = $('d-fee');
+    if (input) input.addEventListener('input', function () {
+      var v = parseFloat(input.value.replace(/,/g,''));
+      var box = $('calc-diff'), val = $('calc-diff-val');
+      if (!box) return;
+      if (isNaN(v)) { box.classList.remove('zero'); val.textContent = '—'; return; }
+      var d2 = v - exp;
+      box.classList.toggle('zero', Math.abs(d2) < 0.005);
+      val.textContent = (d2 > 0 ? '+' : '') + money(d2);
+    });
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden','false');
+    scrim.classList.add('open');
+    $('d-close').focus();
+  }
+  function closeDrawer() {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+    scrim.classList.remove('open');
+  }
+
+  $('rows').addEventListener('click', function (e) { var tr = e.target.closest('tr'); if (tr) openDrawer(tr.getAttribute('data-o3')); });
+  $('rows').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var tr = e.target.closest('tr');
+    if (tr) { e.preventDefault(); openDrawer(tr.getAttribute('data-o3')); }
+  });
+  $('theme-btn').addEventListener('click', function () {
+    var dark = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', dark);
+    $('theme-label').textContent = dark ? '浅色' : '深色';
+    try { localStorage.setItem('ff-theme', dark ? 'dark' : 'light'); } catch (e) {}
+  });
+  ['q','d-from','d-to','f-pay','f-period'].forEach(function (id) {
+    $(id).addEventListener('input', render);
+    $(id).addEventListener('change', render);
+  });
+  $('f-diff').addEventListener('change', function () {
+    render();
+    if (this.checked) toast('已筛选费率 / 实收异常订单 · ' + rows().length + ' 笔');
+  });
+  $('export-btn').addEventListener('click', function () { toast('已导出 ' + rows().length + ' 行 · order_flow_202602-03.csv'); });
+  $('refresh-btn').addEventListener('click', function () { render(); toast('订单流水已刷新 · 共 13 行'); });
+  $('d-close').addEventListener('click', closeDrawer);
+  $('d-close2').addEventListener('click', closeDrawer);
+  scrim.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDrawer();
+    var tag = document.activeElement.tagName;
+    if (e.key === '/' && tag !== 'INPUT' && tag !== 'SELECT') { e.preventDefault(); $('q').focus(); }
+  });
+
+  var stored = null;
+  try { stored = localStorage.getItem('ff-theme'); } catch (e) {}
+  if (stored === 'dark') { document.documentElement.classList.add('dark'); $('theme-label').textContent = '浅色'; }
+  render();
+})();
+</script>
+<script src="grid-stats.js" defer></script>
+</body>
+</html>

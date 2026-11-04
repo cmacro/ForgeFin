@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>导入中心 · ForgeFin</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ===== shell 局部补充（仅本页） ===== */
+.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.nav-item.sub { padding: 5px 16px 5px 32px; font-size: 12.5px; }
+.nav-item.sub svg { width: 13px; height: 13px; }
+.nav-group-title { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 7px 16px 3px; font-size: 11px; letter-spacing: .04em; color: var(--color-sidebar-muted); }
+.nav-group-title .chev { width: 11px; height: 11px; }
+.nav-count { margin-left: auto; font-size: 10.5px; color: var(--color-sidebar-muted); }
+.nav-split { height: 1px; margin: 6px 12px; background: var(--color-sidebar-hover); }
+.content { padding-bottom: 16px; }
+
+/* ===== 步骤条 ===== */
+.flow { display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); flex: 0 0 auto; }
+.flow .stepper { list-style: none; margin: 0; padding: 0; gap: 8px; }
+.flow .step { font-size: 13px; }
+.flow .step.active { color: var(--color-primary); font-weight: 600; }
+.flow .step.active .step-no { background: var(--color-brand-soft); border-color: var(--color-brand); color: var(--color-brand); font-weight: 600; }
+.flow .step.done .step-no { background: var(--color-success-soft); border-color: var(--color-success); color: var(--color-success); }
+.flow .step.done .step-no .ico { width: 10px; height: 10px; }
+.flow .line { width: 20px; height: 1px; background: var(--color-border); }
+.flow .line.done { background: var(--color-success); }
+.flow-meta { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--color-tertiary); }
+.flow-meta .sep { width: 1px; height: 12px; background: var(--color-divider); }
+.flow-meta b { color: var(--color-secondary); font-weight: 500; }
+
+/* ===== 三块主区 ===== */
+.work { display: grid; grid-template-columns: 384px minmax(0, 1fr); gap: 12px; flex: 0 0 auto; }
+.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.p-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 14px; border-bottom: 1px solid var(--color-border-light); flex: 0 0 auto; }
+.p-title { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+.p-idx { width: 17px; height: 17px; border-radius: 50%; background: var(--color-brand-soft); color: var(--color-brand-active); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.p-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--color-tertiary); white-space: nowrap; }
+.p-foot { margin-top: auto; padding: 8px 12px; border-top: 1px solid var(--color-border-light); display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.p-foot .end { margin-left: auto; font-size: 11.5px; color: var(--color-tertiary); }
+
+/* ① 上传 / 扫描 */
+.drop { margin: 10px 12px 0; padding: 9px 12px; display: flex; align-items: center; gap: 10px; border: 1px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-alt); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast); }
+.drop:hover, .drop.over { border-color: var(--color-brand); background: var(--color-brand-soft); }
+.drop:hover .drop-s, .drop.over .drop-s { color: var(--color-secondary); }
+.drop-ico { width: 30px; height: 30px; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-brand); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.drop-t { font-size: 12.5px; font-weight: 500; }
+.drop-t u { text-decoration: none; color: var(--color-brand); }
+.drop-s { font-size: 11.5px; color: var(--color-tertiary); margin-top: 1px; }
+.files { list-style: none; margin: 4px 0 0; padding: 0 6px; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.file { display: flex; align-items: center; gap: 7px; height: 33px; padding: 0 6px; border-radius: var(--radius-sm); }
+.file:hover { background: var(--color-surface-hover); }
+.ftype { flex: 0 0 auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: .04em; padding: 2px 4px; border-radius: var(--radius-xs); border: 1px solid var(--color-border); color: var(--color-secondary); background: var(--color-surface-alt); }
+.fname { flex: 1 1 auto; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fmeta { flex: 0 0 auto; font-family: var(--mono); font-size: 10.5px; color: var(--color-tertiary); }
+.file-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: var(--color-tertiary); }
+.file-dot.ok { background: var(--color-success); }
+.file-dot.warn { background: var(--color-warning); }
+
+/* ② 列映射预览 */
+.map { width: 100%; font-size: 12.5px; }
+.map th { padding: 6px 10px; text-align: left; font-weight: 500; font-size: 11.5px; color: var(--color-tertiary); background: var(--color-surface-alt); border-bottom: 1px solid var(--color-border-light); white-space: nowrap; }
+.map td { height: 27px; padding: 0 10px; border-bottom: 1px solid var(--color-border-light); vertical-align: middle; }
+.map tbody tr:last-child td { border-bottom: 0; }
+.map tbody tr:hover { background: var(--color-surface-hover); }
+.map .raw { font-family: var(--mono); font-size: 11.5px; color: var(--color-secondary); white-space: nowrap; }
+.map .val { font-family: var(--mono); font-size: 11.5px; color: var(--color-tertiary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map .arrow { color: var(--color-disabled); width: 18px; }
+.map .tgt { color: var(--color-primary); white-space: nowrap; }
+.map .tgt em { font-style: normal; color: var(--color-tertiary); font-size: 11px; margin-left: 5px; }
+.map tbody tr.miss-row { background: var(--color-warning-soft); }
+.map tbody tr.miss-row .tgt { font-weight: 600; }
+.miss-note { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11.5px; color: var(--color-primary); background: var(--color-warning-soft); border-top: 1px solid var(--color-border-light); }
+.miss-note .ico { width: 13px; height: 13px; color: var(--color-warning); }
+.miss-note .tag { margin-left: auto; }
+
+/* ③ 余额连续性校验 */
+.check { align-items: center; padding: 9px 14px; border-radius: var(--radius-lg); gap: 12px; flex: 0 0 auto; }
+.check-ico { color: var(--color-warning); display: flex; align-self: flex-start; margin-top: 1px; }
+.check-ico .ico { width: 17px; height: 17px; }
+.check-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.check-title { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.check-title .p-idx { background: var(--color-surface); color: var(--color-primary); border: 1px solid var(--color-border); }
+.check-title strong { font-weight: 600; }
+.check-text { margin: 0; font-size: 12px; color: var(--color-secondary); line-height: 1.5; }
+.check-text b { color: var(--color-primary); font-weight: 600; }
+.check-figs { display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: var(--color-secondary); margin-top: 2px; }
+.check-figs b { display: inline-block; min-width: 70px; font-weight: 600; color: var(--color-primary); }
+.check-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.check-actions .hint { font-size: 11.5px; color: var(--color-tertiary); margin-right: 2px; }
+
+/* 批次历史 */
+.hist { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hist-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.hist-table { font-size: 12.5px; }
+.hist-table tbody td { height: 28px; padding: 0 10px; }
+.hist-table .bno { font-family: var(--mono); font-size: 11.5px; color: var(--color-secondary); }
+.hist-table .src { color: var(--color-secondary); white-space: nowrap; }
+.hist-table .fname-td { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }
+.hist-table .fail { font-weight: 600; }
+.ops { display: flex; align-items: center; gap: 9px; font-size: 12.5px; white-space: nowrap; }
+.ops a { color: var(--color-brand-active); }
+.ops a:hover { text-decoration: underline; }
+.hist-foot { font-size: 12px; color: var(--color-tertiary); }
+.hist-foot b { font-family: var(--mono); color: var(--color-secondary); font-weight: 600; }
+.hist-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mini-select { height: 26px; font-size: 12px; padding: 0 6px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-secondary); }
+
+/* 顶栏 */
+.btn .ico { width: 14px; height: 14px; }
+.theme-toggle .i-sun { display: none; }
+html.dark .theme-toggle .i-sun { display: block; }
+html.dark .theme-toggle .i-moon { display: none; }
+.toast { position: fixed; right: 20px; bottom: 20px; display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); font-size: 12.5px; color: var(--color-primary); opacity: 0; transform: translateY(6px); pointer-events: none; transition: opacity var(--transition-fast), transform var(--transition-fast); z-index: 60; }
+.toast.show { opacity: 1; transform: none; }
+.toast .ico { width: 14px; height: 14px; color: var(--color-brand); }
+/* 深色主题：浅底蓝字改为更亮的品牌变体，保证对比度 */
+html.dark .p-idx, html.dark .drop-ico, html.dark .toast .ico,
+html.dark .flow .step.active .step-no, html.dark .ops a { color: var(--color-brand-hover); }
+html.dark .check-title .p-idx { color: var(--color-primary); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2 8 2.5l5.5 4.7V13a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5z"/><path d="M6.3 13.5V9.4h3.4v4.1"/></symbol>
+<symbol id="i-ledger" viewBox="0 0 16 16"><path d="M3.2 2.6h8.3a1.3 1.3 0 0 1 1.3 1.3v9.5H4.5a1.3 1.3 0 0 1-1.3-1.3z"/><path d="M3.2 11.3a1.3 1.3 0 0 1 1.3-1.3h8.3"/></symbol>
+<symbol id="i-report" viewBox="0 0 16 16"><path d="M2.5 13.5h11"/><path d="M4.7 11V7.4M8 11V4.4M11.3 11V8.8"/></symbol>
+<symbol id="i-receive" viewBox="0 0 16 16"><path d="M8 2.8v6.6M5.4 6.8 8 9.4l2.6-2.6"/><path d="M2.8 11.6v1.6h10.4v-1.6"/></symbol>
+<symbol id="i-pay" viewBox="0 0 16 16"><path d="M8 13.2V6.6M5.4 9.2 8 6.6l2.6 2.6"/><path d="M2.8 4.4V2.8h10.4v1.6"/></symbol>
+<symbol id="i-asset" viewBox="0 0 16 16"><path d="M2.6 5.4 8 2.6l5.4 2.8v5.2L8 13.4l-5.4-2.8z"/><path d="M2.6 5.4 8 8.2l5.4-2.8M8 8.2v5.2"/></symbol>
+<symbol id="i-cashier" viewBox="0 0 16 16"><path d="M2.6 5.4h10.8v7.2H2.6z"/><path d="M2.6 5.4 11 2.8v2.6"/><path d="M10.6 9h2.8"/></symbol>
+<symbol id="i-budget" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.4"/><path d="M8 2.6V8h5.4"/></symbol>
+<symbol id="i-tax" viewBox="0 0 16 16"><path d="M12 4 4 12"/><circle cx="4.8" cy="4.8" r="1.5"/><circle cx="11.2" cy="11.2" r="1.5"/></symbol>
+<symbol id="i-import" viewBox="0 0 16 16"><path d="M8 10.4V2.8M5.4 5.4 8 2.8l2.6 2.6"/><path d="M2.8 10.2v3h10.4v-3"/></symbol>
+<symbol id="i-recon" viewBox="0 0 16 16"><path d="M2.8 6h9.4L9.8 3.6"/><path d="M13.2 10H3.8l2.4 2.4"/></symbol>
+<symbol id="i-audit" viewBox="0 0 16 16"><path d="M2.8 3.4h7.4M2.8 7h5.4M2.8 10.6h3.6"/><path d="M9.6 11.2l1.7 1.7 2.9-3.3"/></symbol>
+<symbol id="i-bank" viewBox="0 0 16 16"><path d="M2.6 6.4 8 3l5.4 3.4"/><path d="M4.2 6.9v5M8 6.9v5M11.8 6.9v5M2.6 13.2h10.8"/></symbol>
+<symbol id="i-order" viewBox="0 0 16 16"><path d="M4 2.8h8v10.4l-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M6 6.2h4M6 9h4"/></symbol>
+<symbol id="i-store" viewBox="0 0 16 16"><path d="M3 6.6h10V13H3z"/><path d="M2.8 6.6 3.9 3h8.2l1.1 3.6M6.4 9.6h3.2"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16"><path d="M2.8 3.4h10.4v7.2H7.6L4.2 13.2v-2.6H2.8z"/></symbol>
+<symbol id="i-sum" viewBox="0 0 16 16"><rect x="2.6" y="2.6" width="4.4" height="4.4" rx=".8"/><rect x="9" y="2.6" width="4.4" height="4.4" rx=".8"/><rect x="2.6" y="9" width="4.4" height="4.4" rx=".8"/><rect x="9" y="9" width="4.4" height="4.4" rx=".8"/></symbol>
+<symbol id="i-book" viewBox="0 0 16 16"><rect x="2.6" y="3" width="10.8" height="4" rx="1"/><rect x="2.6" y="9" width="10.8" height="4" rx="1"/></symbol>
+<symbol id="i-set" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.6v1.8M8 11.6v1.8M2.6 8h1.8M11.6 8h1.8M4.2 4.2l1.3 1.3M10.5 10.5l1.3 1.3M11.8 4.2l-1.3 1.3M5.5 10.5l-1.3 1.3"/></symbol>
+<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.6 6.4 8 9.8l3.4-3.4"/></symbol>
+<symbol id="i-up" viewBox="0 0 16 16"><path d="M8 12V4M4.4 7.6 8 4l3.6 3.6"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.6 12.4V5h4.2l1.4 1.8h5.2v5.6z"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 16 16"><path d="M12.8 8a4.8 4.8 0 1 1-1.4-3.4"/><path d="M13 2.6v3.2h-3.2"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9.4 4.4 13 8l-3.6 3.6"/></symbol>
+<symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 2.8 13.6 13H2.4z"/><path d="M8 6.6v3.2M8 11.6v.01"/></symbol>
+<symbol id="i-check" viewBox="0 0 16 16"><path d="M3.2 8.4 6.4 11.6 12.8 4.8"/></symbol>
+<symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.8v1.5M8 12.7v1.5M1.8 8h1.5M12.7 8h1.5M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16"><path d="M12.6 9.6A5.2 5.2 0 0 1 6.4 3.4 5.4 5.4 0 1 0 12.6 9.6z"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="sidebar" data-od-id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">F</div>
+      <div class="brand-name">ForgeFin</div>
+      <span class="brand-sub">示例账套</span>
+    </div>
+    <nav class="nav scrollbar-thin" aria-label="主导航">
+      <a class="nav-item" href="index.html"><svg><use href="#i-home"/></svg>首页</a>
+      <a class="nav-item" href="#"><svg><use href="#i-ledger"/></svg>总账</a>
+      <a class="nav-item" href="#"><svg><use href="#i-report"/></svg>报表中心</a>
+      <a class="nav-item" href="#"><svg><use href="#i-receive"/></svg>应收管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-pay"/></svg>应付管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-asset"/></svg>固定资产</a>
+      <a class="nav-item" href="#"><svg><use href="#i-cashier"/></svg>出纳管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-budget"/></svg>预算管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-tax"/></svg>税务管理</a>
+      <div class="nav-group-title"><svg class="chev"><use href="#i-chev"/></svg>原始凭证<span class="nav-count">8</span></div>
+      <a class="nav-item sub active" href="import-center.html" aria-current="page"><svg><use href="#i-import"/></svg>导入中心</a>
+      <a class="nav-item sub" href="reconciliation.html"><svg><use href="#i-recon"/></svg>对账中心<span class="nav-badge">6</span></a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-audit"/></svg>审计日志</a>
+      <a class="nav-item sub" href="bank-flow.html"><svg><use href="#i-bank"/></svg>银行流水</a>
+      <a class="nav-item sub" href="order-flow.html"><svg><use href="#i-order"/></svg>订单流水</a>
+      <a class="nav-item sub" href="store-collection.html"><svg><use href="#i-store"/></svg>店面收款</a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-chat"/></svg>聊天记录</a>
+      <a class="nav-item sub" href="#"><svg><use href="#i-sum"/></svg>数据汇总</a>
+      <div class="nav-split"></div>
+      <a class="nav-item" href="#"><svg><use href="#i-book"/></svg>账套管理</a>
+      <a class="nav-item" href="#"><svg><use href="#i-set"/></svg>系统设置</a>
+    </nav>
+    <div class="nav-foot"><span class="dot"></span>账套正常 · 2026 年度</div>
+  </aside>
+
+  <div class="main">
+    <header class="header" data-od-id="header">
+      <div class="crumb">
+        <span class="crumb-group">原始凭证</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb-current">导入中心</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn theme-toggle" id="theme-btn" data-od-id="theme-toggle" aria-label="切换浅色或深色主题">
+          <svg class="ico i-sun"><use href="#i-sun"/></svg>
+          <svg class="ico i-moon"><use href="#i-moon"/></svg>
+          <span id="theme-label">深色</span>
+        </button>
+        <button class="btn btn-icon" id="refresh-btn" title="刷新" aria-label="刷新"><svg class="ico"><use href="#i-refresh"/></svg></button>
+        <button class="btn btn-primary" data-od-id="primary-action" id="primary-btn"><svg class="ico"><use href="#i-check"/></svg><span id="primary-label">确认映射，继续校验</span></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- 步骤条 -->
+      <div class="flow" data-od-id="import-stepper">
+        <ol class="stepper" aria-label="导入进度">
+          <li class="step done"><span class="step-no"><svg class="ico"><use href="#i-check"/></svg></span>选择文件</li>
+          <li class="line done" aria-hidden="true"></li>
+          <li class="step active" aria-current="step"><span class="step-no">2</span>列映射</li>
+          <li class="line" aria-hidden="true"></li>
+          <li class="step"><span class="step-no">3</span>校验</li>
+          <li class="line" aria-hidden="true"></li>
+          <li class="step"><span class="step-no">4</span>入库结果</li>
+        </ol>
+        <div class="flow-meta">
+          <span>批次 <b class="mono">BT-20260301-04</b></span><span class="sep"></span>
+          <span>文件 <b class="mono">bank_flow_20260301.tsv</b></span><span class="sep"></span>
+          <span>总行数 <b class="mono">412</b></span>
+        </div>
+      </div>
+
+      <!-- ①上传 ②列映射 -->
+      <div class="work">
+        <section class="panel" data-od-id="upload-panel">
+          <div class="p-head">
+            <div class="p-title"><span class="p-idx">1</span>上传 / 扫描</div>
+            <div class="p-meta">支持 TSV · CSV · XLSX</div>
+          </div>
+          <div class="drop" id="drop" role="button" tabindex="0" aria-label="拖拽或浏览文件" data-od-id="dropzone">
+            <span class="drop-ico"><svg class="ico"><use href="#i-up"/></svg></span>
+            <div>
+              <div class="drop-t">拖拽文件到此处，或<u>浏览本地文件</u></div>
+              <div class="drop-s">单文件 ≤ 20 MB，同名批次自动去重</div>
+            </div>
+          </div>
+          <input type="file" id="file-input" multiple accept=".tsv,.csv,.xlsx" hidden>
+          <ul class="files" id="files">
+            <li class="file"><span class="ftype">TSV</span><span class="fname" title="bank_flow_20260301.tsv">bank_flow_20260301.tsv</span><span class="fmeta">412 行 · 38.6 KB</span><span class="file-dot ok" title="已就绪"></span></li>
+            <li class="file"><span class="ftype">TSV</span><span class="fname" title="bank_flow_20260228.tsv">bank_flow_20260228.tsv</span><span class="fmeta">388 行 · 36.1 KB</span><span class="file-dot" title="已导入"></span></li>
+            <li class="file"><span class="ftype">CSV</span><span class="fname" title="order_flow_20260228.csv">order_flow_20260228.csv</span><span class="fmeta">1,206 行 · 96.4 KB</span><span class="file-dot warn" title="待扫描"></span></li>
+            <li class="file"><span class="ftype">XLSX</span><span class="fname" title="store_collection_202602.xlsx">store_collection_202602.xlsx</span><span class="fmeta">96 行 · 24.8 KB</span><span class="file-dot ok" title="已就绪"></span></li>
+          </ul>
+          <div class="p-foot">
+            <button class="btn btn-sm"><svg class="ico"><use href="#i-folder"/></svg>扫描原始数据目录</button>
+            <span class="end">~/ForgeFin 原始数据 · 只读</span>
+          </div>
+        </section>
+
+        <section class="panel" data-od-id="mapping-preview">
+          <div class="p-head">
+            <div class="p-title"><span class="p-idx">2</span>列映射预览</div>
+            <div class="p-meta">14 列 · 13 已映射 · 1 未匹配</div>
+            <button class="btn btn-sm btn-ghost">调整映射</button>
+          </div>
+          <table class="map">
+            <thead><tr><th style="width:104px">原始表头</th><th>样本值</th><th style="width:20px"></th><th style="width:168px">识别目标字段</th><th style="width:82px">识别结果</th></tr></thead>
+            <tbody>
+              <tr><td class="raw">交易日期</td><td class="val">2026-03-01</td><td class="arrow">→</td><td class="tgt">交易日期<em>date</em></td><td><span class="tag tag-plain tag-success">已识别</span></td></tr>
+              <tr><td class="raw">业务单号</td><td class="val">BZ20260301004</td><td class="arrow">→</td><td class="tgt">业务单号<em>text</em></td><td><span class="tag tag-plain tag-success">已识别</span></td></tr>
+              <tr><td class="raw">借贷标志</td><td class="val">贷</td><td class="arrow">→</td><td class="tgt">金额方向<em>enum</em></td><td><span class="tag tag-plain tag-pending">需确认</span></td></tr>
+              <tr><td class="raw">发生额</td><td class="val">12,000.00</td><td class="arrow">→</td><td class="tgt">交易金额<em>decimal</em></td><td><span class="tag tag-plain tag-success">已识别</span></td></tr>
+              <tr><td class="raw">对方账号</td><td class="val">1001****7575</td><td class="arrow">→</td><td class="tgt">对方账号<em>masked</em></td><td><span class="tag tag-plain tag-success">已识别</span></td></tr>
+              <tr class="miss-row"><td class="raw">—</td><td class="val">原始文件无此列</td><td class="arrow">→</td><td class="tgt">账户余额<em>decimal</em></td><td><span class="tag tag-plain tag-danger">未识别</span></td></tr>
+            </tbody>
+          </table>
+          <div class="miss-note">
+            <svg class="ico"><use href="#i-alert"/></svg>
+            缺少关键列「账户余额」：本批次余额连续性校验将跳过，历史余额仍可回溯。
+            <span class="tag tag-plain tag-pending">不阻断导入</span>
+          </div>
+        </section>
+      </div>
+
+      <!-- ③ 余额连续性校验 -->
+      <section class="banner banner-warning check" data-od-id="balance-check">
+        <span class="check-ico"><svg class="ico"><use href="#i-alert"/></svg></span>
+        <div class="check-body">
+          <div class="check-title">
+            <span class="p-idx">3</span>
+            <strong>余额连续性校验</strong>
+            <span class="tag tag-plain tag-pending">差额 <span class="text-money">120.50</span> 元</span>
+          </div>
+          <p class="check-text">批次 <b class="mono">BT-20260228-02</b> 的 Σ(转入 − 转出) 与相邻批次衔接不上；位置：第 <b>3</b> 行（2026-03-01 09:12:44 · 业务单号 <b class="mono">BZ20260301004</b>），该行余额 48,320.50。</p>
+          <div class="check-figs">
+            <span>上一批期末余额 <b class="text-money">48,200.00</b></span>
+            <span>本批净额 <b class="text-money">48,320.50</b></span>
+            <span>校验范围 <b>近 3 个批次</b></span>
+          </div>
+        </div>
+        <div class="check-actions">
+          <span class="hint">仅提示，不阻断导入</span>
+          <button class="btn btn-sm" id="later-btn">稍后确认</button>
+          <a class="btn btn-sm" href="bank-flow.html">前往银行流水<svg class="ico"><use href="#i-arrow"/></svg></a>
+        </div>
+      </section>
+
+      <!-- 批次历史 -->
+      <section class="panel hist" data-od-id="batch-history">
+        <div class="p-head">
+          <div class="p-title">导入批次历史<span class="tag tag-plain tag-draft">6 个批次</span></div>
+          <div class="hist-tools">
+            <span class="p-meta" style="margin:0">按导入时间倒序</span>
+            <select class="mini-select" aria-label="按来源类型筛选">
+              <option>全部来源</option><option>银行流水</option><option>订单流水</option><option>店面收款</option>
+            </select>
+          </div>
+        </div>
+        <div class="hist-scroll scrollbar-thin">
+          <table class="data-table hist-table">
+            <thead>
+              <tr>
+                <th style="width:214px">批次号</th><th style="width:92px">来源类型</th><th>文件名</th>
+                <th class="num" style="width:78px">总行数</th><th class="num" style="width:66px">成功</th><th class="num" style="width:66px">失败</th>
+                <th style="width:158px">导入时间</th><th style="width:132px">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="bno">BT-20260301-04</span> <span class="tag tag-plain tag-success">已导入</span></td>
+                <td class="src">银行流水</td><td class="fname-td" title="bank_flow_20260301.tsv">bank_flow_20260301.tsv</td>
+                <td class="num">412</td><td class="num">412</td><td class="num">0</td>
+                <td class="mono text-tertiary">2026-03-01 10:24:16</td>
+                <td><div class="ops"><a href="#">查看</a><a href="bank-flow.html">前往流水</a></div></td>
+              </tr>
+              <tr class="row-warning">
+                <td><span class="bno">BT-20260228-02</span> <span class="tag tag-plain tag-pending">余额警告</span></td>
+                <td class="src">银行流水</td><td class="fname-td" title="bank_flow_20260228.tsv">bank_flow_20260228.tsv</td>
+                <td class="num">388</td><td class="num">388</td><td class="num">0</td>
+                <td class="mono text-tertiary">2026-02-28 18:02:41</td>
+                <td><div class="ops"><a href="#">查看</a><a href="bank-flow.html">前往流水</a></div></td>
+              </tr>
+              <tr class="row-danger">
+                <td><span class="bno">BT-20260228-01</span> <span class="tag tag-plain tag-danger">导入失败</span></td>
+                <td class="src">订单流水</td><td class="fname-td" title="order_flow_20260228.csv">order_flow_20260228.csv</td>
+                <td class="num">1,206</td><td class="num">1,194</td><td class="num fail">12</td>
+                <td class="mono text-tertiary">2026-02-28 11:37:05</td>
+                <td><div class="ops"><a href="#">查看错误</a><a href="order-flow.html">前往流水</a></div></td>
+              </tr>
+              <tr>
+                <td><span class="bno">BT-20260227-02</span> <span class="tag tag-plain tag-success">已导入</span></td>
+                <td class="src">店面收款</td><td class="fname-td" title="store_collection_202602.xlsx">store_collection_202602.xlsx</td>
+                <td class="num">96</td><td class="num">96</td><td class="num">0</td>
+                <td class="mono text-tertiary">2026-02-27 16:20:33</td>
+                <td><div class="ops"><a href="#">查看</a><a href="store-collection.html">前往收款</a></div></td>
+              </tr>
+              <tr>
+                <td><span class="bno">BT-20260227-01</span> <span class="tag tag-plain tag-success">已导入</span></td>
+                <td class="src">银行流水</td><td class="fname-td" title="bank_flow_20260227.tsv">bank_flow_20260227.tsv</td>
+                <td class="num">425</td><td class="num">425</td><td class="num">0</td>
+                <td class="mono text-tertiary">2026-02-27 09:48:12</td>
+                <td><div class="ops"><a href="#">查看</a><a href="bank-flow.html">前往流水</a></div></td>
+              </tr>
+              <tr>
+                <td><span class="bno">BT-20260226-01</span> <span class="tag tag-plain tag-success">已导入</span></td>
+                <td class="src">订单流水</td><td class="fname-td" title="order_flow_20260226.csv">order_flow_20260226.csv</td>
+                <td class="num">988</td><td class="num">988</td><td class="num">0</td>
+                <td class="mono text-tertiary">2026-02-26 20:15:57</td>
+                <td><div class="ops"><a href="#">查看</a><a href="order-flow.html">前往流水</a></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-foot hist-foot">
+          共 6 个批次 · 成功写入 <b>3,503</b> 行 · 失败 <b>12</b> 行 · 最近导入 2026-03-01 10:24:16
+          <span class="end">一次性完整展示 · 不分页</span>
+        </div>
+      </section>
+      <div class="status-bar" data-od-id="page-footer">
+        <div class="footer-stats"><span class="footer-hint">选中单元格或拖拽框选区域，页脚显示合计 / 平均 / 数量 / 最大 / 最小</span></div>
+        <div class="footer-right">
+          <span class="footer-total">共 6 个批次 · 成功写入 3,503 行 · 失败 12 行</span>
+          <div class="pager"><span>一次性完整展示 · 不分页</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><svg class="ico"><use href="#i-check"/></svg><span id="toast-text"></span></div>
+
+<script>
+(function () {
+  var toastEl = document.getElementById('toast');
+  var toastText = document.getElementById('toast-text');
+  var toastTimer;
+  function toast(msg) {
+    toastText.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+  }
+
+  var root = document.documentElement;
+  var btn = document.getElementById('theme-btn');
+  var label = document.getElementById('theme-label');
+  var stored = null;
+  try { stored = localStorage.getItem('ff-theme'); } catch (e) {}
+  function paint(dark) {
+    root.classList.toggle('dark', dark);
+    label.textContent = dark ? '浅色' : '深色';
+  }
+  paint(stored === 'dark');
+  btn.addEventListener('click', function () {
+    var dark = !root.classList.contains('dark');
+    paint(dark);
+    try { localStorage.setItem('ff-theme', dark ? 'dark' : 'light'); } catch (e) {}
+  });
+
+  var drop = document.getElementById('drop');
+  var input = document.getElementById('file-input');
+  var list = document.getElementById('files');
+  function kind(name) {
+    var ext = (name.split('.').pop() || '').toUpperCase();
+    return ['TSV', 'CSV', 'XLSX'].indexOf(ext) > -1 ? ext : 'FILE';
+  }
+  function addFiles(files) {
+    Array.prototype.slice.call(files).forEach(function (f) {
+      if (list.children.length >= 6) return;
+      var li = document.createElement('li');
+      li.className = 'file';
+      var t = document.createElement('span'); t.className = 'ftype'; t.textContent = kind(f.name);
+      var n = document.createElement('span'); n.className = 'fname'; n.textContent = f.name; n.title = f.name;
+      var m = document.createElement('span'); m.className = 'fmeta';
+      m.textContent = f.size ? (f.size / 1024).toFixed(1) + ' KB' : '待扫描';
+      var d = document.createElement('span'); d.className = 'file-dot warn'; d.title = '待扫描';
+      li.appendChild(t); li.appendChild(n); li.appendChild(m); li.appendChild(d);
+      list.insertBefore(li, list.firstChild);
+    });
+  }
+  drop.addEventListener('click', function () { input.click(); });
+  drop.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  input.addEventListener('change', function () { addFiles(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  document.getElementById('later-btn').addEventListener('click', function () {
+    document.querySelector('.check').style.display = 'none';
+    toast('已记入待确认：批次 BT-20260228-02 · 差额 120.50 元');
+  });
+  document.getElementById('refresh-btn').addEventListener('click', function () {
+    toast('批次历史已刷新 · 共 6 个批次');
+  });
+  document.getElementById('primary-btn').addEventListener('click', function () {
+    var steps = document.querySelectorAll('.flow .step');
+    var label = document.getElementById('primary-label');
+    if (!steps[2].classList.contains('active')) {
+      steps[1].classList.remove('active');
+      steps[1].classList.add('done');
+      steps[1].removeAttribute('aria-current');
+      steps[2].classList.add('active');
+      steps[2].setAttribute('aria-current', 'step');
+      var pending = document.querySelector('.map .tag-pending');
+      if (pending) { pending.textContent = '已识别'; pending.className = 'tag tag-plain tag-success'; }
+      label.textContent = '确认入库';
+      toast('映射已确认：14 列 → 13 个字段，进入校验');
+    } else {
+      toast('校验通过：预计写入 412 行，失败 0 行');
+    }
+  });
+})();
+</script>
+<script src="grid-stats.js" defer></script>
+</body>
+</html>
